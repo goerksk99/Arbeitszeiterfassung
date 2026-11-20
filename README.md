@@ -157,3 +157,26 @@ keinen Urlaubstag. Regionale Feiertage sind bisher nicht enthalten.
 Neu abgeschlossene Monate speichern die Tageswerte. Bei älteren Abschlüssen
 kennzeichnet die App rekonstruierte Tageswerte. Die alte Monatssumme gilt
 weiterhin.
+
+## Windows-Version 0.6.0
+
+1. Im vorhandenen Supabase-Projekt die
+   [Dashboard-Migration](supabase/migrations/20261120050000_dashboard_and_current_reports.sql)
+   einmal vollständig im SQL Editor ausführen. Der vorhandene SQL-Tab genügt.
+2. Für **Passwort zurücksetzen** die bestehende Edge-Funktion
+   [manage-employee](supabase/functions/manage-employee/index.ts) mit der
+   neuen `index.ts` aktualisieren und erneut bereitstellen.
+3. Die App schließen, die neue Windows-ZIP im vorhandenen Ordner entpacken
+   und `Arbeitszeiterfassung-starten.cmd` starten.
+
+Laufende Monatsberichte, Kalender-Kennzahlen und CSV berücksichtigen die
+Berliner Kalendertage bis einschließlich heute. Abgeschlossene Monate
+zeigen weiterhin die archivierten Werte. Im Teamkalender erscheinen
+genehmigte Abwesenheiten. Eigene Anträge und Entscheidungen bleiben auf
+dem Dashboard und in den jeweiligen Antragsansichten sichtbar.
+
+Bei vergessenem Mitarbeiterpasswort öffnet ein Admin **Verwaltung →
+Mitarbeiter verwalten**, klappt das Profil auf und wählt **Passwort
+zurücksetzen**. Das neue Startpasswort persönlich weitergeben. Die
+Mitarbeiterin oder der Mitarbeiter kann es nach dem Anmelden über
+**Passwort ändern** ersetzen.

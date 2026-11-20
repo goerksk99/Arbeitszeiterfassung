@@ -224,3 +224,29 @@ label { color: inherit; }
 .staff-member-details { margin-top: 8px; border: 1px solid #e1e8f0; border-radius: 9px; }
 .staff-member-details summary { padding: 8px 12px; font-size: 14px; }
 .staff-member-details[open] > summary { background: #eff4f8; border-radius: 8px 8px 0 0; }
+
+.dashboard { display: grid; gap: 18px; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; }
+.dashboard-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 740; }
+.dashboard-title svg { color: var(--green); }
+.dashboard-week { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 5px; margin-top: 12px; }
+.dashboard-day { display: grid; place-items: center; gap: 1px; padding: 6px 3px 9px; position: relative; border: 1px solid #e1e8f0; border-radius: 8px; color: var(--ink); }
+.dashboard-day:hover { border-color: var(--green); }
+.dashboard-day[aria-current="date"] { background: #e7f7ef; border-color: #75b79e; }
+.dashboard-day span, .dashboard-decisions small { display: block; color: var(--muted); font-size: 11px; }
+.dashboard-day i, .dashboard-legend span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.dashboard-day i { position: absolute; bottom: 3px; }
+.dashboard-legend { display: flex; align-items: center; gap: 6px; margin-top: 9px; color: var(--muted); font-size: 12px; }
+.dashboard-count { margin-top: 8px; font-size: 33px; font-weight: 780; line-height: 1.1; }
+.dashboard-count-label { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.dashboard-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 7px; }
+.dashboard-actions .btn-secondary { padding: 7px 10px; min-height: 35px; font-size: 12px; }
+.dashboard-actions span { color: var(--green); }
+.dashboard-decisions { margin-top: 8px; }
+.dashboard-decisions li { display: flex; align-items: center; justify-content: space-between; gap: 9px; border-bottom: 1px solid #e5ebf2; padding: 9px 0; font-size: 14px; }
+.dashboard-decisions .entry-status { gap: 5px; align-items: center; }
+.team-pause-timer { font-variant-numeric: tabular-nums; }
+.staff-reset { border-top: 1px solid #e1e8f0; padding: 10px 16px; font-size: 13px; }
+.staff-reset summary, .login-recovery summary { color: var(--green); font-weight: 650; }
+.login-recovery p { color: var(--muted); font-size: 14px; margin-top: 9px; }
+@media (max-width: 830px) { .dashboard-grid { grid-template-columns: 1fr; } }

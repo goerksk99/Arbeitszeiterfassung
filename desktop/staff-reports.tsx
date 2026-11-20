@@ -33,8 +33,11 @@ export function DailyReportTable({ member, month, refresh }: { member: string; m
 
   if (notice) return <Message notice={notice} />;
   if (!data) return <p role="status" className="muted-notice">Tageswerte werden geladen …</p>;
+  if (!data.days.length) return <p className="muted-notice">Für diesen Monat liegen noch keine Buchungstage vor.</p>;
+  const today = Temporal.Now.plainDateISO("Europe/Berlin").toString();
   return <div className="mt-6">
     <h3 className="panel-heading">Tagesübersicht · {monthLabel(month)}</h3>
+    {today.slice(0, 7) === month && <p className="muted-notice">Stand {dayLabel(today)} · einschließlich heute</p>}
     {data.reconstructed && <p className="muted-notice">Dieser Monat wurde vor dem Update abgeschlossen. Die Tageswerte sind rekonstruiert, die gespeicherte Monatssumme gilt.</p>}
     <div className="overflow-x-auto">
       <table className="daily-report">

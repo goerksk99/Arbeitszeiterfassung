@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Clock3, KeyRound, LogOut, Timer, UsersRound } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Clock3, KeyRound, LayoutDashboard, LogOut, UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import "../app/globals.css";
 
@@ -10,7 +10,7 @@ import { Admin, type AdminSection } from "./admin";
 import { Calendar } from "./calendar";
 import { Reports } from "./reports";
 import { button, field, PasswordForm } from "./ui";
-import { Clock } from "./clock";
+import { Dashboard } from "./dashboard";
 import { AbsenceRequest } from "./absence-request";
 import "./theme.css";
 import "./print.css";
@@ -23,7 +23,7 @@ const adminItems: { id: AdminSection; label: string }[] = [
   { id: "break", label: "Automatische Mittagspause" },
 ];
 const navigation = [
-  { screen: "work", label: "Stempeluhr", icon: Timer },
+  { screen: "work", label: "Dashboard", icon: LayoutDashboard },
   { screen: "entries", label: "Arbeitszeiten", icon: Clock3 },
   { screen: "calendar", label: "Teamkalender", icon: CalendarDays },
   { screen: "absence", label: "Abwesenheit beantragen", icon: CalendarPlus },
@@ -37,6 +37,7 @@ function App() {
   const [pending, setPending] = useState(false);
   const [screen, setScreen] = useState<Screen>("work");
   const [passwordForm, setPasswordForm] = useState(false);
+  const [calendarDay, setCalendarDay] = useState<string>();
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<AdminSection>("status");
   const [pendingRequests, setPendingRequests] = useState(0);
@@ -150,7 +151,7 @@ function App() {
                     </button>)}
                   </div>}
                 </> : <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
-                  onClick={() => { setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
+                  onClick={() => { if (name === "calendar") setCalendarDay(undefined); setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
               </Fragment>
             ))}
           </nav>
@@ -174,9 +175,9 @@ function App() {
             </header>
             {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
             {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
-            {screen === "work" && <Clock profile={profile} onEntries={() => setScreen("entries")} />}
+            {screen === "work" && <Dashboard profile={profile} onEntries={() => setScreen("entries")} onCalendar={(day) => { setCalendarDay(day); setScreen("calendar"); }} onRequests={() => setScreen("absence")} />}
             {screen === "entries" && <Workbench profile={profile} />}
-            {screen === "calendar" && <Calendar profile={profile} onRequest={() => setScreen("absence")} />}
+            {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => setScreen("absence")} />}
             {screen === "absence" && <AbsenceRequest profile={profile} />}
             {screen === "admin" && profile.role === "admin" && <Admin key={adminSection} profile={profile} section={adminSection} onChanged={() => setAdminRefresh((count) => count + 1)} />}
             {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
@@ -200,6 +201,10 @@ function App() {
           </label>
           {error && <p role="alert" className="app-notice app-notice--error">{error}</p>}
           <button type="submit" disabled={pending} className={button}>{pending ? "Anmeldung läuft …" : "Anmelden"}</button>
+          <details className="login-recovery">
+            <summary>Passwort vergessen?</summary>
+            <p>Melde dich bei eurer Verwaltung. Sie kann dir ein neues Startpasswort geben. Danach kannst du es unter „Passwort ändern“ selbst ändern.</p>
+          </details>
         </form>
       </section>
     </main>

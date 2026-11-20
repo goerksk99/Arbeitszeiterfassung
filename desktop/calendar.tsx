@@ -5,11 +5,11 @@ import { type AbsenceType, berlinDate } from "../lib/work-time";
 import { CalendarStaffReport } from "./staff-reports";
 import { DepartmentBadge, type Department, type TeamGroup } from "./team";
 import { supabase, type Profile } from "./supabase";
-import { absenceColors, absenceLabels, absenceStatus, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, secondary, type Member, type Notice } from "./ui";
+import { absenceColors, absenceLabels, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, secondary, type Member, type Notice } from "./ui";
 
 type CalendarEntry = {
   id: string; user_id: string; full_name: string; type: AbsenceType;
-  start_date: string; end_date: string; status: keyof typeof absenceStatus; department: Department | null; group_ids: string[];
+  start_date: string; end_date: string; status: "approved" | "submitted" | "rejected"; department: Department | null; group_ids: string[];
 };
 const kinds = Object.keys(absenceLabels) as AbsenceType[];
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -49,10 +49,10 @@ function MonthGrid({ month, items, holidays, compact, selected, selectDay }: {
   );
 }
 
-export function Calendar({ profile, onRequest }: { profile: Profile; onRequest: () => void }) {
-  const [month, setMonth] = useState(monthNow);
+export function Calendar({ profile, onRequest, initialDay }: { profile: Profile; onRequest: () => void; initialDay?: string }) {
+  const [month, setMonth] = useState(() => initialDay?.slice(0, 7) ?? monthNow());
   const [yearMode, setYearMode] = useState(false);
-  const [selectedDay, setSelectedDay] = useState("");
+  const [selectedDay, setSelectedDay] = useState(initialDay ?? "");
   const [filter, setFilter] = useState<AbsenceType[]>(kinds);
   const [member, setMember] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
@@ -95,7 +95,7 @@ export function Calendar({ profile, onRequest }: { profile: Profile; onRequest: 
         setLoadError({ text: "Der Teamkalender konnte nicht geladen werden. Prüfe, ob das aktuelle SQL-Update eingespielt ist.", error: true });
         setEntries([]); setHolidays(new Map()); setGroups([]);
       } else {
-        setEntries(calendar.data as CalendarEntry[]);
+        setEntries((calendar.data as CalendarEntry[]).filter((entry) => entry.status === "approved"));
         setHolidays(new Map((days.data as { day: string; name: string }[]).map((day) => [day.day, day.name])));
         setGroups(groupList.data as TeamGroup[]);
       }
@@ -155,7 +155,7 @@ export function Calendar({ profile, onRequest }: { profile: Profile; onRequest: 
           {details.length ? <ul className="calendar-details">
             {details.map((item) => <li key={item.id}>
               <div><strong>{item.full_name}</strong> <DepartmentBadge department={item.department} />
-                <p>{dayLabel(item.start_date)}{item.start_date !== item.end_date && ` bis ${dayLabel(item.end_date)}`} · {absenceStatus[item.status]}</p>
+                <p>{dayLabel(item.start_date)}{item.start_date !== item.end_date && ` bis ${dayLabel(item.end_date)}`}</p>
                 {item.group_ids.length > 0 && <div className="calendar-group-tags">{groups.filter((group) => item.group_ids.includes(group.id)).map((group) => <span key={group.id}>{group.name}</span>)}</div>}
               </div>
               <span className={`rounded px-2 py-1 ${absenceColors[item.type]}`}>{absenceLabels[item.type]}</span>

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { berlinDate, COMPANY_ZONE, type AbsenceType } from "../lib/work-time";
 import { supabase, type Profile } from "./supabase";
 import { DepartmentBadge, DepartmentOptions, type TeamGroup } from "./team";
-import { time } from "./time-display";
+import { duration, time } from "./time-display";
 import { absenceLabels, button, card, dayLabel, field, listMembers, Message, requestError, secondary, type Member, type Notice } from "./ui";
 
 const dateTime = new Intl.DateTimeFormat("de-DE", { timeZone: COMPANY_ZONE, dateStyle: "short", timeStyle: "short" });
@@ -13,8 +13,9 @@ type AbsenceRequest = { id: string; user_id: string; type: AbsenceType; start_da
 type Shift = OpenEntry & { ended_at: string | null };
 type Membership = { group_id: string; user_id: string };
 export type AdminSection = "status" | "requests" | "staff" | "break";
+type ActivePause = { user_id: string; paused_at: string };
 type Data = {
-  members: Member[]; corrections: Correction[]; open: OpenEntry[]; paused: string[]; shifts: Shift[]; groups: TeamGroup[]; membership: Membership[];
+  members: Member[]; corrections: Correction[]; open: OpenEntry[]; paused: ActivePause[]; shifts: Shift[]; groups: TeamGroup[]; membership: Membership[];
   absences: AbsenceRequest[]; awayToday: AbsenceRequest[];
   settings: { auto_break_start: string; auto_break_minutes: number };
 };
@@ -49,7 +50,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
         supabase.from("absences").select("id,user_id,type,start_date,end_date,note").eq("status", "submitted").order("created_at").abortSignal(signal),
         supabase.from("absences").select("id,user_id,type,start_date,end_date,note").eq("status", "approved").lte("start_date", today).gte("end_date", today).abortSignal(signal),
         supabase.from("company_settings").select("auto_break_start,auto_break_minutes").eq("id", 1).abortSignal(signal).single(),
-        supabase.rpc("admin_paused_members").abortSignal(signal),
+        supabase.rpc("admin_pause_details").abortSignal(signal),
         supabase.from("time_entries").select("id,user_id,started_at,ended_at").is("corrects_entry_id", null)
           .in("status", ["open","recorded","approved"])
           .or(`and(started_at.gte.${from},started_at.lt.${until}),and(ended_at.gte.${from},ended_at.lt.${until})`)
@@ -63,7 +64,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
       setData({
         members, corrections: corrections.data as Correction[], open: open.data as OpenEntry[],
         absences: absences.data as AbsenceRequest[], awayToday: awayToday.data as AbsenceRequest[],
-        settings: settings.data!, paused: (pauses.data ?? []) as string[],
+        settings: settings.data!, paused: (pauses.data ?? []) as ActivePause[],
         shifts: shifts.data as Shift[], groups: groups.data as TeamGroup[], membership: membership.data as Membership[],
       });
       setLoadError(undefined);
@@ -184,6 +185,24 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
     } finally { setBusy(false); }
   }
 
+  function resetPassword(event: FormEvent<HTMLFormElement>, member: Member) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const password = String(new FormData(form).get("password") ?? "");
+    void change(async () => {
+      const { error } = await supabase.functions.invoke("manage-employee", {
+        body: { action: "reset-password", memberId: member.id, password },
+      });
+      if (error) {
+        const response = "context" in error ? error.context : undefined;
+        const detail = response instanceof Response ? await response.json().catch(() => null) : null;
+        throw { code: "P0001", message: detail?.error ?? "Das Passwort konnte nicht zurückgesetzt werden. Prüfe, ob die Edge-Funktion aktualisiert ist." };
+      }
+      form.reset();
+      form.closest("details")?.removeAttribute("open");
+    }, "Neues Startpasswort gesetzt. Gib es persönlich weiter.");
+  }
+
   if (profile.role !== "admin") return null;
   if (!data) return <section className={card}>
     <h2 className="text-lg font-semibold">Admin</h2>
@@ -212,7 +231,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           {data.members.filter((member) => member.is_active).map((member) => {
             const open = data.open.find((entry) => entry.user_id === member.id);
             const away = data.awayToday.find((entry) => entry.user_id === member.id);
-            const isPaused = data.paused.includes(member.id);
+            const paused = data.paused.find((pause) => pause.user_id === member.id);
             const shifts = data.shifts.filter((shift) => shift.user_id === member.id);
             const booked = shifts.map((shift) => shift.started_at).filter((stamp) => berlinDate(stamp) === today).sort();
             const ended = shifts.flatMap((shift) => shift.ended_at ? [shift.ended_at] : []).filter((stamp) => berlinDate(stamp) === today).sort();
@@ -220,8 +239,8 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
               <div><strong>{member.full_name}</strong><div><DepartmentBadge department={member.department} /></div></div>
               <div><small>Erstes Einstempeln</small><strong>{booked[0] ? time.format(Date.parse(booked[0])) + " Uhr" : "–"}</strong></div>
               <div><small>Letztes Ausstempeln</small><strong>{ended.length ? time.format(Date.parse(ended.at(-1)!)) + " Uhr" : "–"}</strong></div>
-              <span className={`entry-status ${isPaused ? "entry-status--rejected" : open ? "entry-status--recorded" : ""}`}>
-                {isPaused ? "In Pause" : open ? (berlinDate(open.started_at) === today ? "Eingestempelt" : "Offene Buchung vom Vortag")
+              <span className={`entry-status ${paused ? "entry-status--rejected" : open ? "entry-status--recorded" : ""}`}>
+                {paused ? <PauseTimer startedAt={paused.paused_at} /> : open ? (berlinDate(open.started_at) === today ? "Eingestempelt" : "Offene Buchung vom Vortag")
                   : away ? "Abwesend · " + absenceLabels[away.type] : "Ausgestempelt"}
               </span>
             </li>;
@@ -281,6 +300,13 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           <label className="py-2"><input name="active" type="checkbox" defaultChecked={member.is_active} disabled={profile.id === member.id} className="mr-2" />Aktiv</label>
           <button className={secondary} disabled={busy}>Speichern</button>
           </form>
+          {member.role === "employee" && member.is_active && <details className="staff-reset">
+            <summary>Passwort zurücksetzen</summary>
+            <form onSubmit={(event) => resetPassword(event, member)} className="mt-3 flex flex-wrap items-end gap-3">
+              <label>Neues Startpasswort<input className={field} name="password" type="password" autoComplete="new-password" minLength={12} maxLength={72} required /></label>
+              <button className={secondary} disabled={busy}>Startpasswort setzen</button>
+            </form>
+          </details>}
         </details>)}
         <h3 className="mt-6 font-medium">Mitarbeiterkonto anlegen</h3>
         <form onSubmit={createMember} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -318,4 +344,15 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
       </section>}
     </div>
   );
+}
+
+
+function PauseTimer({ startedAt }: { startedAt: string }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000));
+  return <span className="team-pause-timer">In Pause · {duration(Math.floor(seconds / 60))}:{String(seconds % 60).padStart(2, "0")}</span>;
 }
