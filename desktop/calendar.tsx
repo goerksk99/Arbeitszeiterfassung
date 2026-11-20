@@ -1,8 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { useEffect, useState } from "react";
-import { CalendarDays, ChartNoAxesColumn, Plus } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { type AbsenceType, berlinDate } from "../lib/work-time";
-import { CalendarStaffReport } from "./staff-reports";
 import { DepartmentBadge, departments, type Department } from "./team";
 import { supabase, type Profile } from "./supabase";
 import { absenceColors, absenceLabels, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, secondary, type Member, type Notice } from "./ui";
@@ -59,7 +58,6 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [department, setDepartment] = useState("");
   const [holidays, setHolidays] = useState(new Map<string, string>());
-  const [showReport, setShowReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<Notice>();
   const admin = profile.role === "admin";
@@ -114,9 +112,6 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="panel-heading flex items-center gap-2"><CalendarDays size={20} aria-hidden="true" />Kalenderübersicht</h2>
           <div className="flex flex-wrap gap-2">
-            {admin && <button className={secondary} aria-expanded={showReport} onClick={() => { if (!showReport) requestAnimationFrame(() => document.getElementById("calendar-staff-report")?.scrollIntoView({ block: "start" })); setShowReport(!showReport); }}>
-              <ChartNoAxesColumn size={17} aria-hidden="true" />{showReport ? "Admin-Auswertung ausblenden" : "Admin-Auswertung"}
-            </button>}
             <button className={secondary} onClick={onRequest}><Plus size={17} aria-hidden="true" />Abwesenheiten</button>
             <button className={yearMode ? secondary : button} aria-pressed={!yearMode} onClick={() => { setYearMode(false); setSelectedDay(""); }}>Monat</button>
             <button className={yearMode ? button : secondary} aria-pressed={yearMode} onClick={() => { setYearMode(true); setSelectedDay(""); }}>Jahr</button>
@@ -161,7 +156,6 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
           </ul> : <p className="mt-2 text-sm text-slate-600">Keine Abwesenheiten für diese Auswahl.</p>}
         </div>}
       </section>
-      {admin && showReport && <CalendarStaffReport members={members} month={month} />}
     </div>
   );
 }

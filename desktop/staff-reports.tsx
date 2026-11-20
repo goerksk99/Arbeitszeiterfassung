@@ -5,7 +5,7 @@ import type { AbsenceType } from "../lib/work-time";
 import { supabase } from "./supabase";
 import { DepartmentBadge } from "./team";
 import { duration } from "./time-display";
-import { absenceLabels, card, dayLabel, field, Message, monthLabel, requestError, type Member, type Notice } from "./ui";
+import { absenceLabels, card, dayLabel, field, listMembers, Message, monthLabel, monthNow, requestError, type Member, type Notice } from "./ui";
 
 export type DailyRow = {
   day: string; target_minutes: number; worked_minutes: number; break_minutes: number;
@@ -62,41 +62,72 @@ export function DailyReportTable({ member, month, refresh }: { member: string; m
   </div>;
 }
 
-export function CalendarStaffReport({ members, month }: { members: Member[]; month: string }) {
-  const [memberId, setMemberId] = useState("");
+export function StaffReport({ initialMember }: { initialMember: string }) {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [memberId, setMemberId] = useState(initialMember);
+  const [month, setMonth] = useState(monthNow);
+  const [notice, setNotice] = useState<Notice>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void listMembers(controller.signal).then((result) => {
+      if (!controller.signal.aborted) setMembers(result);
+    }).catch(() => {
+      if (!controller.signal.aborted) setNotice({ text: "Die Mitarbeiterliste konnte nicht geladen werden.", error: true });
+    });
+    return () => controller.abort();
+  }, []);
+
   const person = members.find((member) => member.id === memberId);
-  return <section className={card} id="calendar-staff-report">
-    <h2 className="panel-heading">Mitarbeiterauswertung</h2>
-    <label className="mt-3 block max-w-xs">Mitarbeiter<select className={field} value={memberId} onChange={(event) => setMemberId(event.target.value)}>
-      <option value="">Bitte wählen</option>{members.map((member) => <option key={member.id} value={member.id}>{member.full_name}</option>)}
-    </select></label>
-    {person && <CalendarStaffMetrics key={person.id + month} person={person} month={month} />}
+  return <section className={card}>
+    <div className="flex flex-wrap gap-4">
+      <label>Mitarbeiter<select className={field} value={memberId} onChange={(event) => setMemberId(event.target.value)}>
+        <option value="">Bitte wählen</option>
+        {members.map((member) => <option key={member.id} value={member.id}>{member.full_name}{!member.is_active && " (inaktiv)"}</option>)}
+      </select></label>
+      <label>Monat<input type="month" className={field} min="0002-01" max="9999-12" value={month} onChange={(event) => {
+        if (event.target.value && event.target.validity.valid) setMonth(event.target.value);
+      }} /></label>
+    </div>
+    <Message notice={notice} />
+    {person && <StaffMetrics key={person.id + month} person={person} month={month} />}
   </section>;
 }
 
-function CalendarStaffMetrics({ person, month }: { person: Member; month: string }) {
-  const [report, setReport] = useState<MonthlyReport>();
+function StaffMetrics({ person, month }: { person: Member; month: string }) {
+  const [report, setReport] = useState<{ monthly: MonthlyReport; remainingLeave: number | null }>();
   const [notice, setNotice] = useState<Notice>();
+  const year = Number(month.slice(0, 4));
   useEffect(() => {
     const controller = new AbortController();
+    const signal = controller.signal;
     const selected = Temporal.PlainYearMonth.from(month);
-    void supabase.rpc("read_monthly_report", { member_id: person.id, report_year: selected.year, report_month: selected.month })
-      .abortSignal(controller.signal).then(({ data, error }) => {
-        if (controller.signal.aborted) return;
-        if (error) setNotice({ text: requestError(error), error: true });
-        else setReport(data as MonthlyReport);
+    void Promise.all([
+      supabase.rpc("read_monthly_report", { member_id: person.id, report_year: selected.year, report_month: selected.month }).abortSignal(signal),
+      supabase.rpc("read_member_annual_leave", { member_id: person.id, report_year: selected.year }).abortSignal(signal),
+    ]).then(([monthly, leave]) => {
+      if (signal.aborted) return;
+      if (monthly.error || leave.error) setNotice({ text: requestError(monthly.error ?? leave.error), error: true });
+      else setReport({
+        monthly: monthly.data as MonthlyReport,
+        remainingLeave: leave.data === null ? null : Number(leave.data),
       });
+    }).catch(() => {
+      if (!signal.aborted) setNotice({ text: "Die Auswertung konnte nicht geladen werden.", error: true });
+    });
     return () => controller.abort();
   }, [person.id, month]);
+  const monthly = report?.monthly;
   return <>
-    <div className="mt-4 flex flex-wrap items-center gap-2"><strong>{monthLabel(month)}</strong><DepartmentBadge department={person.department} /></div>
+    <div className="mt-5 flex flex-wrap items-center gap-2"><strong>{monthLabel(month)}</strong><DepartmentBadge department={person.department} /></div>
     <Message notice={notice} />
-    {!notice && !report && <p className="muted-notice">Auswertung wird geladen …</p>}
-    {report && <div className="time-metrics">
-      <div><span>Ist-Arbeitszeit</span><strong>{duration(report.worked_minutes)} <small>Std.</small></strong></div>
-      <div><span>Plus-/Minusstunden inkl. Vortrag</span><strong>{signedDuration(report.balance_minutes)} <small>Std.</small></strong></div>
-      <div><span>Urlaub</span><strong>{report.vacation_days} <small>Tage</small></strong></div>
-      <div><span>Krankheit</span><strong>{report.sick_days} <small>Tage</small></strong></div>
+    {!notice && !monthly && <p className="muted-notice">Auswertung wird geladen …</p>}
+    {monthly && report && <div className="time-metrics">
+      <div><span>Ist-Arbeitszeit</span><strong>{duration(monthly.worked_minutes)} <small>Std.</small></strong></div>
+      <div><span>Plus-/Minusstunden inkl. Vortrag</span><strong>{signedDuration(monthly.balance_minutes)} <small>Std.</small></strong></div>
+      <div><span>Urlaub im Monat</span><strong>{monthly.vacation_days} <small>Tage</small></strong></div>
+      <div><span>Krankheit im Monat</span><strong>{monthly.sick_days} <small>Tage</small></strong></div>
+      <div><span>Resturlaub {year}</span><strong>{report.remainingLeave === null ? "–" : new Intl.NumberFormat("de-DE").format(report.remainingLeave)} <small>Tage</small></strong></div>
     </div>}
   </>;
 }

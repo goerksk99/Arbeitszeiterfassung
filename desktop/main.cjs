@@ -1,6 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, session, Tray } = require("electron");
-const { writeFile } = require("node:fs/promises");
-const { resolve, sep } = require("node:path");
+const { lstat, readFile, writeFile } = require("node:fs/promises");
+const { basename, dirname, resolve, sep } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 protocol.registerSchemesAsPrivileged([
@@ -29,6 +29,29 @@ function statusIcon(color) {
   return nativeImage.createFromBitmap(bytes, { width, height: width, scaleFactor: 1 });
 }
 
+async function readLocalBranding() {
+  const runtime = dirname(process.execPath);
+  const location = /^runtime-\d+\.\d+\.\d+-x64$/.test(basename(runtime)) ? dirname(runtime) : runtime;
+  const entries = await Promise.all([
+    ["container", "nextway-container"], ["logoLight", "nextway-logo-light"], ["logoDark", "nextway-logo-dark"],
+  ].map(async ([key, stem]) => {
+    for (const extension of ["png", "jpg", "jpeg"]) {
+      const path = resolve(location, `${stem}.${extension}`);
+      try {
+        const info = await lstat(path);
+        if (!info.isFile() || info.size > 12 * 1024 * 1024) continue;
+        const bytes = await readFile(path);
+        const isPng = extension === "png";
+        const signature = isPng ? "89504e470d0a1a0a" : "ffd8ff";
+        if (bytes.subarray(0, signature.length / 2).toString("hex") !== signature) continue;
+        return [key, { path: `/local-branding/${stem}.${extension}`, bytes, mime: isPng ? "image/png" : "image/jpeg" }];
+      } catch { /* Try the next filename or use the bundled branding. */ }
+    }
+    return null;
+  }));
+  return Object.fromEntries(entries.filter(Boolean));
+}
+
 let showExistingWindow;
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -37,14 +60,17 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(start);
 }
 
-function start() {
+async function start() {
+  const localBranding = await readLocalBranding();
   protocol.handle("aze", (request) => {
     const url = new URL(request.url);
     if (url.hostname !== "desktop" || request.method !== "GET") {
       return new Response(null, { status: 404 });
     }
+    const image = Object.values(localBranding).find((entry) => entry.path === url.pathname);
+    if (image) return new Response(image.bytes, { headers: { "Content-Type": image.mime } });
     // Only serve the entry point and Vite's hashed bundles.
-    if (url.pathname !== "/index.html" && !/^\/assets\/[A-Za-z0-9_-]+\.(js|css)$/.test(url.pathname)) {
+    if (url.pathname !== "/index.html" && !/^\/assets\/[A-Za-z0-9_-]+\.(js|css|png|jpg|jpeg|webp)$/.test(url.pathname)) {
       return new Response(null, { status: 404 });
     }
     const file = resolve(rendererRoot, "." + url.pathname);
@@ -55,7 +81,7 @@ function start() {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, respond) => respond(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   const window = new BrowserWindow({
-    title: "Arbeitszeiterfassung",
+    title: "Nextway · Arbeitszeiterfassung",
     width: 1120,
     height: 760,
     minWidth: 420,
@@ -86,7 +112,7 @@ function start() {
   function updateTray() {
     if (!tray) return;
     tray.setImage(icons[state.status] ?? icons.stopped);
-    tray.setToolTip("Arbeitszeiterfassung: " + trayLabels[state.status]);
+    tray.setToolTip("Nextway · Arbeitszeiterfassung: " + trayLabels[state.status]);
     const item = (label, action) => ({ label, enabled: !state.busy, click: () => {
       if (!window.isDestroyed()) window.webContents.send("desktop:tray-action", action);
     } });
@@ -137,6 +163,10 @@ function start() {
   ipcMain.on("desktop:clock-problem", (event) => { if (trusted(event)) showWindow(); });
   ipcMain.on("desktop:print-report", (event) => {
     if (trusted(event)) window.webContents.print({ landscape: true });
+  });
+  ipcMain.handle("desktop:branding-assets", (event) => {
+    if (!trusted(event)) return {};
+    return Object.fromEntries(Object.entries(localBranding).map(([key, value]) => [key, `aze://desktop${value.path}`]));
   });
   ipcMain.handle("desktop:save-monthly-pdf", async (event, month) => {
     if (!trusted(event) || typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || pdfSaving) return false;

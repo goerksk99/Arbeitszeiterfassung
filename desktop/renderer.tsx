@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Clock3, KeyRound, LayoutDashboard, LogOut, UsersRound } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChartNoAxesColumn, ChevronDown, ClipboardList, Clock3, KeyRound, LayoutDashboard, LogOut, UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import "../app/globals.css";
 
 import { supabase, type Profile } from "./supabase";
+import { StaffReport } from "./staff-reports";
 import { Workbench } from "./workbench";
 import { Admin, type AdminSection } from "./admin";
 import { Calendar } from "./calendar";
@@ -12,11 +13,13 @@ import { Reports } from "./reports";
 import { EmailAuth, type EmailAuthMode } from "./email-auth";
 import { button, field, Message, PasswordForm } from "./ui";
 import { Dashboard } from "./dashboard";
+import { BrandPhoto, CompanyBrand } from "./branding";
 import { AbsenceRequest } from "./absence-request";
 import "./theme.css";
+import "./branding.css";
 import "./print.css";
 
-type Screen = "work" | "entries" | "calendar" | "absence" | "admin" | "reports";
+type Screen = "work" | "entries" | "calendar" | "absence" | "admin" | "reports" | "staff-report";
 const adminItems: { id: AdminSection; label: string }[] = [
   { id: "status", label: "Teamstatus heute" },
   { id: "requests", label: "Anträge und offene Buchungen" },
@@ -29,6 +32,7 @@ const navigation = [
   { screen: "calendar", label: "Teamkalender", icon: CalendarDays },
   { screen: "absence", label: "Abwesenheiten", icon: CalendarPlus },
   { screen: "admin", label: "Verwaltung", icon: UsersRound, admin: true },
+  { screen: "staff-report", label: "Mitarbeiterauswertung", icon: ChartNoAxesColumn, admin: true },
   { screen: "reports", label: "Monatsberichte", icon: ClipboardList, admin: true },
 ] as const;
 
@@ -135,7 +139,7 @@ function App() {
     return (
       <main className="app-shell">
         <aside className="sidebar no-print">
-          <div className="app-brand"><span className="brand-icon"><Clock3 size={22} aria-hidden="true" /></span><span>Arbeitszeiterfassung</span></div>
+          <CompanyBrand variant="sidebar" />
           <nav aria-label="Hauptnavigation">
             {navigation.filter((item) => !("admin" in item) || profile.role === "admin").map(({ screen: name, label, icon: Icon }) => (
               <Fragment key={name}>
@@ -173,9 +177,12 @@ function App() {
         </aside>
         <div className="screen-area">
           <div className="screen-frame space-y-5">
-            <header className="screen-header no-print">
-              <h1>{screen === "admin" ? adminItems.find((item) => item.id === adminSection)?.label : current.label}</h1>
-              {screen === "work" && <p>Willkommen, {profile.name}</p>}
+            <header className="screen-header brand-header no-print">
+              <BrandPhoto className="brand-header-photo" />
+              <div className="brand-header-copy">
+                <h1>{screen === "admin" ? adminItems.find((item) => item.id === adminSection)?.label : current.label}</h1>
+                {screen === "work" && <p>Willkommen, {profile.name}</p>}
+              </div>
             </header>
             {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
             {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
@@ -184,6 +191,7 @@ function App() {
             {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => setScreen("absence")} />}
             {screen === "absence" && <AbsenceRequest profile={profile} />}
             {screen === "admin" && profile.role === "admin" && <Admin key={adminSection} profile={profile} section={adminSection} onChanged={() => setAdminRefresh((count) => count + 1)} />}
+            {screen === "staff-report" && profile.role === "admin" && <StaffReport initialMember={profile.id} />}
             {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
           </div>
         </div>
@@ -193,8 +201,9 @@ function App() {
 
   return (
     <main className="login-screen">
+      <BrandPhoto className="login-container-photo" />
       <section className="login-panel">
-        <div className="app-brand"><span className="brand-icon"><Clock3 size={22} aria-hidden="true" /></span>Arbeitszeiterfassung</div>
+        <CompanyBrand variant="login" />
         <h1>Anmelden</h1>
         {loginSuccess && <div className="mt-3"><Message notice={{ text: loginSuccess }} /></div>}
         <form onSubmit={signIn} className="mt-5 space-y-4">

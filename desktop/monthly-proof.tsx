@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MonthlyReport } from "../lib/monthly-report";
 import type {} from "./desktop-api";
+import { ProofBrand } from "./branding";
 import { Modal } from "./modal";
 import { type DailyReport, signedDuration } from "./staff-reports";
 import { supabase } from "./supabase";
@@ -14,10 +15,13 @@ type ProofData = { summary: MonthlyReport; daily: DailyReport };
 
 function ProofSheet({ data, name, month }: { data: ProofData; name: string; month: string }) {
   return <article className="proof-sheet">
-    <header>
-      <h2>Monatsnachweis Arbeitszeit</h2>
-      <p>{monthLabel(month)} · {name}</p>
-      <small>{data.summary.is_locked ? "Abgeschlossener Monat" : "Vorläufiger Stand"}</small>
+    <header className="proof-header">
+      <div>
+        <h2>Monatsnachweis Arbeitszeit</h2>
+        <p>{monthLabel(month)} · {name}</p>
+        <small>{data.summary.is_locked ? "Abgeschlossener Monat" : "Vorläufiger Stand"}</small>
+      </div>
+      <ProofBrand />
     </header>
     {data.daily.reconstructed && <p>Die Tageswerte wurden rekonstruiert. Es gilt die gespeicherte Monatssumme.</p>}
     <table>

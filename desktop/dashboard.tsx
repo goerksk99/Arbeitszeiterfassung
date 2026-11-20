@@ -10,7 +10,7 @@ import { absenceLabels, card, dayLabel, Message, secondary, type Notice } from "
 type FinalStatus = "approved" | "rejected";
 type Decision = { id: string; title: string; detail: string; status: FinalStatus; when: string };
 type Leave = { type: AbsenceType; start_date: string; end_date: string };
-type Data = { time: number; leave: number; decisions: Decision[]; absences: Leave[]; holidays: Map<string, string> };
+type Data = { time: number; leave: number; remainingLeave: number | null; decisions: Decision[]; absences: Leave[]; holidays: Map<string, string> };
 
 export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockProblem }: {
   profile: Profile; onEntries: () => void; onCalendar: (day?: string) => void; onRequests: () => void; onClockProblem: () => void;
@@ -19,6 +19,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
   const [notice, setNotice] = useState<Notice>();
   const [refresh, setRefresh] = useState(0);
   const today = Temporal.Now.plainDateISO(COMPANY_ZONE).toString();
+  const currentYear = Number(today.slice(0, 4));
   const monday = weekMonday(isoWeek(Temporal.PlainDate.from(today)));
   const first = monday.toString();
   const last = monday.add({ days: 6 }).toString();
@@ -34,7 +35,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
     const signal = controller.signal;
     const id = profile.id;
     async function load() {
-      const [time, leave, timeDecisions, leaveDecisions, absences, holidays] = await Promise.all([
+      const [time, leave, timeDecisions, leaveDecisions, absences, holidays, leaveBalance] = await Promise.all([
         supabase.from("time_entries").select("id", { count: "exact", head: true }).eq("user_id", id).eq("status", "submitted").abortSignal(signal),
         supabase.from("absences").select("id", { count: "exact", head: true }).eq("user_id", id).eq("status", "submitted").abortSignal(signal),
         supabase.from("time_entries").select("id,started_at,status,created_at,decided_at")
@@ -46,6 +47,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
         supabase.from("absences").select("type,start_date,end_date").eq("user_id", id).eq("status","approved")
           .lte("start_date", last).gte("end_date", first).abortSignal(signal),
         supabase.rpc("company_holidays", { first_day: first, last_day: last }).abortSignal(signal),
+        supabase.rpc("read_annual_leave", { report_year: currentYear }).abortSignal(signal),
       ]);
       if (signal.aborted) return;
       if ([time, leave, timeDecisions, leaveDecisions, absences, holidays].some((result) => result.error)) {
@@ -66,6 +68,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
       ];
       setData({
         time: time.count ?? 0, leave: leave.count ?? 0,
+        remainingLeave: leaveBalance.error || leaveBalance.data === null ? null : Number(leaveBalance.data),
         decisions: decisions.sort((a, b) => Date.parse(b.when) - Date.parse(a.when)).slice(0, 10),
         absences: (absences.data ?? []) as Leave[],
         holidays: new Map((holidays.data as { day: string; name: string }[]).map((item) => [item.day, item.name])),
@@ -76,7 +79,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
       if (!signal.aborted) setNotice({ text: "Anträge und Kalenderdaten konnten nicht geladen werden.", error: true });
     });
     return () => controller.abort();
-  }, [profile.id, first, last, refresh]);
+  }, [profile.id, first, last, currentYear, refresh]);
 
   const count = (data?.time ?? 0) + (data?.leave ?? 0);
   const days = Array.from({ length: 7 }, (_, index) => monday.add({ days: index }));
@@ -110,6 +113,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
         {data ? <>
           <p className="dashboard-count">{count}</p>
           <p className="dashboard-count-label">{count === 1 ? "Antrag wartet auf Prüfung" : "Anträge warten auf Prüfung"}</p>
+          {data.remainingLeave !== null && <p className="dashboard-leave"><strong>{new Intl.NumberFormat("de-DE").format(data.remainingLeave)} Tage</strong> Resturlaub {currentYear}</p>}
           <div className="dashboard-actions">
             <button className={secondary} onClick={onRequests}>Abwesenheiten <span>{data.leave}</span></button>
             <button className={secondary} onClick={onEntries}>Zeitkorrekturen <span>{data.time}</span></button>
