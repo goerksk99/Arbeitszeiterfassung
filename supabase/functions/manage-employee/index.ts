@@ -46,12 +46,18 @@ Deno.serve(async (request: Request) => {
   if (error || !data.user) {
     return json({ error: "Das Konto konnte nicht angelegt werden. Prüfe, ob die E-Mail bereits verwendet wird." }, 409);
   }
-  const { error: profileError } = await admin.from("profiles").insert({
+  // The signed-in administrator has an explicit INSERT grant and profile policy.
+  // The service role is only needed by the Auth administration API.
+  const { error: profileError } = await caller.from("profiles").insert({
     id: data.user.id, full_name: name, role: "employee", department,
   });
   if (profileError) {
+    console.error("Profile insert failed", profileError.code);
     const rollback = await admin.auth.admin.deleteUser(data.user.id);
-    if (rollback.error) console.error("Rollback fehlgeschlagen", data.user.id);
+    if (rollback.error) {
+      console.error("Auth account cleanup failed", rollback.error.code);
+      return json({ error: "Das Profil konnte nicht gespeichert werden. Prüfe unter Authentication → Users, ob das neue Konto noch vorhanden ist." }, 500);
+    }
     return json({ error: "Das Mitarbeiterprofil konnte nicht angelegt werden." }, 500);
   }
   return json({ ok: true }, 201);
