@@ -10,7 +10,9 @@
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "start": "next start --hostname 0.0.0.0"
+    "start": "next start --hostname 0.0.0.0",
+    "desktop:build": "vite build --config desktop/vite.config.mts",
+    "desktop:package": "npm run desktop:build && node desktop/package.mjs"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
@@ -21,13 +23,17 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@tailwindcss/postcss": "^4.3.5",
+    "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "electron": "^45.4.1",
     "postcss": "^8.5.33",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
   }
 }

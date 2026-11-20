@@ -34,3 +34,21 @@ Datenbank und kein Datenbankpasswort.
 
 Nach dem Deployment die von Render angezeigte Adresse öffnen. Der Start leitet
 zur Anmeldung weiter. Nach Inaktivität kann der erste Aufruf etwas dauern.
+
+## Windows-App mit Supabase Free
+
+Die Windows-App ist ein portables Testpaket für Windows x64. Das ZIP komplett
+entpacken und `Arbeitszeiterfassung.exe` im entpackten Ordner öffnen. Zum
+Anmelden das vorhandene Supabase-Testkonto verwenden. Eine Internetverbindung
+ist erforderlich. Die App speichert die Anmeldesitzung nur bis zum Schließen.
+
+Zum erneuten Packen mit Node.js 24, `.env.local` und dem öffentlichen
+Supabase Publishable Key:
+
+```sh
+npm ci
+npm run desktop:package
+```
+
+Das Ergebnis liegt in `.desktop/release/Arbeitszeiterfassung-win32-x64`.
+Das Paket ist unsigniert. Es enthält den Desktop-Login und den Profilabruf.
