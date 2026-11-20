@@ -51,4 +51,13 @@ npm run desktop:package
 ```
 
 Das Ergebnis liegt in `.desktop/release/Arbeitszeiterfassung-win32-x64`.
-Das Paket ist unsigniert. Es enthält den Desktop-Login und den Profilabruf.
+Das Paket ist unsigniert. Es enthält Anmeldung, Stempeluhr, eigene
+Buchungen und Korrekturanträge. Für ein bestehendes Supabase-Projekt
+zuerst die Migration `supabase/migrations/20261120010000_desktop_clock.sql`
+im SQL Editor ausführen. Die Übersicht ordnet Buchungen nach ihrem
+Berliner Startdatum zu und nutzt abgeschlossene Vormonate für den
+Saldoübertrag.
+
+Das kleine ZIP in `downloads/` verwendet denselben App-Build und lädt
+Electron beim ersten Start von GitHub. Zum Aktualisieren die App
+schließen und das ZIP in denselben entpackten Ordner kopieren.
