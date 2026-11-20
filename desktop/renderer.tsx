@@ -38,6 +38,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>("work");
   const [passwordForm, setPasswordForm] = useState(false);
   const [calendarDay, setCalendarDay] = useState<string>();
+  const [newAbsence, setNewAbsence] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<AdminSection>("status");
   const [pendingRequests, setPendingRequests] = useState(0);
@@ -151,7 +152,7 @@ function App() {
                     </button>)}
                   </div>}
                 </> : <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
-                  onClick={() => { if (name === "calendar") setCalendarDay(undefined); setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
+                  onClick={() => { if (name === "calendar") setCalendarDay(undefined); if (name === "absence") setNewAbsence(true); setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
               </Fragment>
             ))}
           </nav>
@@ -175,10 +176,10 @@ function App() {
             </header>
             {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
             {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
-            {screen === "work" && <Dashboard profile={profile} onEntries={() => setScreen("entries")} onCalendar={(day) => { setCalendarDay(day); setScreen("calendar"); }} onRequests={() => setScreen("absence")} />}
+            <div hidden={screen !== "work"}><Dashboard profile={profile} onEntries={() => setScreen("entries")} onCalendar={(day) => { setCalendarDay(day); setScreen("calendar"); }} onRequests={() => { setNewAbsence(false); setScreen("absence"); }} onClockProblem={() => setScreen("work")} /></div>
             {screen === "entries" && <Workbench profile={profile} />}
-            {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => setScreen("absence")} />}
-            {screen === "absence" && <AbsenceRequest profile={profile} />}
+            {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => { setNewAbsence(true); setScreen("absence"); }} />}
+            {screen === "absence" && <AbsenceRequest profile={profile} initialOpen={newAbsence} />}
             {screen === "admin" && profile.role === "admin" && <Admin key={adminSection} profile={profile} section={adminSection} onChanged={() => setAdminRefresh((count) => count + 1)} />}
             {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
           </div>

@@ -7,11 +7,11 @@ import { DepartmentBadge } from "./team";
 import { duration } from "./time-display";
 import { absenceLabels, card, dayLabel, field, Message, monthLabel, requestError, type Member, type Notice } from "./ui";
 
-type DailyRow = {
+export type DailyRow = {
   day: string; target_minutes: number; worked_minutes: number; break_minutes: number;
   difference_minutes: number; holiday: string | null; absence_type: AbsenceType | null;
 };
-type DailyReport = { days: DailyRow[]; archived: boolean; reconstructed: boolean };
+export type DailyReport = { days: DailyRow[]; archived: boolean; reconstructed: boolean };
 
 export function signedDuration(value: number) { return value > 0 ? "+" + duration(value) : duration(value); }
 

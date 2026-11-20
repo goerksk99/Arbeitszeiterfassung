@@ -2,15 +2,12 @@ import { useEffect, useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { reportCsv, type MonthlyReport, type NamedReport } from "../lib/monthly-report";
 import { berlinDate } from "../lib/work-time";
+import { MonthlyProof } from "./monthly-proof";
 import { DailyReportTable, signedDuration } from "./staff-reports";
 import { supabase, type Profile } from "./supabase";
 import { button, card, field, listMembers, Message, monthLabel, monthNow, requestError, secondary, type Member, type Notice } from "./ui";
 
-declare global {
-  interface Window {
-    desktop?: { printReport: () => void };
-  }
-}
+import type {} from "./desktop-api";
 
 function minutes(value: number) {
   const absolute = Math.abs(value);
@@ -26,6 +23,7 @@ export function Reports({ profile }: { profile: Profile }) {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState("");
   const [confirm, setConfirm] = useState<NamedReport | null>(null);
+  const [proof, setProof] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const admin = profile.role === "admin";
 
@@ -99,6 +97,7 @@ export function Reports({ profile }: { profile: Profile }) {
         <h2 className="panel-heading">Monatsübersicht</h2>
         <div className="no-print flex flex-wrap gap-2">
           <button className={secondary} disabled={loading || !rows.length} onClick={exportCsv}>CSV exportieren</button>
+          {selectedRow && <button className={button} disabled={loading} onClick={() => setProof(true)}>Monatsnachweis als PDF</button>}
           <button className={secondary} disabled={loading || !rows.length} onClick={() => window.desktop ? window.desktop.printReport() : window.print()}>Drucken</button>
         </div>
       </div>
@@ -154,6 +153,7 @@ export function Reports({ profile }: { profile: Profile }) {
       </div>}
       {!loading && member && rows.some((row) => row.user_id === member) &&
         <DailyReportTable key={member + month + refresh} member={member} month={month} refresh={refresh} />}
+      {proof && selectedRow && <MonthlyProof member={selectedRow.user_id} name={selectedRow.full_name} month={month} onClose={() => setProof(false)} />}
       {confirm && <div className="no-print mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
         <p>Monat {monthLabel(month)} für {confirm.full_name} abschließen? Die Summen werden fest gespeichert und Mitarbeiterbuchungen gesperrt.</p>
         <div className="mt-3 flex gap-2">

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { berlinDate, calculateEntry, COMPANY_ZONE } from "../lib/work-time";
 import { isoWeek, weekMonday } from "../lib/iso-week";
 import { supabase, type Profile } from "./supabase";
+import { Modal } from "./modal";
+import { MonthlyProof } from "./monthly-proof";
 import { type MonthlyReport } from "../lib/monthly-report";
 import { button, card, field, Message, monthLabel, requestError, secondary, type Notice } from "./ui";
 import { date, duration, entryColumns, optionalBreak, time, type Entry } from "./time-display";
@@ -44,6 +46,7 @@ export function Workbench({ profile }: { profile: Profile }) {
   const [pending, setPending] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [message, setMessage] = useState<Notice>();
+  const [proof, setProof] = useState(false);
   const [correction, setCorrection] = useState<Entry | "new" | null>(null);
 
   const reload = useCallback(() => {
@@ -154,6 +157,11 @@ export function Workbench({ profile }: { profile: Profile }) {
     }
   }
 
+  function openCorrection(entry: Entry | "new") {
+    setMessage(undefined);
+    setCorrection(entry);
+  }
+
   const source = correction && correction !== "new" ? correction : null;
   const allLocked = Boolean(report && Object.values(report.lockedMonths).every(Boolean));
   const grouped = Map.groupBy(entries, (entry) => berlinDate(entry.started_at));
@@ -166,13 +174,16 @@ export function Workbench({ profile }: { profile: Profile }) {
   return (
     <div className="space-y-5">
       {loadError && <p role="alert" className="text-red-700">{loadError} <button className="underline" onClick={reload}>Erneut laden</button></p>}
-      <Message notice={message} />
+      {!correction && <Message notice={message} />}
       <section className="period-toolbar">
         <div className="period-toggle" aria-label="Zeitraum">
           <button type="button" aria-pressed={mode === "week"} disabled={pending} onClick={() => { if (mode !== "week") { setMode("week"); setReady(false); setCorrection(null); } }}>Kalenderwoche</button>
           <button type="button" aria-pressed={mode === "month"} disabled={pending} onClick={() => { if (mode !== "month") { setMode("month"); setReady(false); setCorrection(null); } }}>Monat</button>
         </div>
-        <button type="button" disabled={!ready || pending || allLocked} className={button} onClick={() => setCorrection("new")}><Plus size={18} aria-hidden="true" />Zeit nachtragen</button>
+        <div className="flex flex-wrap gap-2">
+        {mode === "month" && <button type="button" disabled={!ready || pending} className={secondary} onClick={() => setProof(true)}>Monatsnachweis als PDF</button>}
+        <button type="button" disabled={!ready || pending || allLocked} className={button} onClick={() => openCorrection("new")}><Plus size={18} aria-hidden="true" />Zeit nachtragen</button>
+        </div>
       </section>
       <section className={`${card} period-panel`}>
         <div className="period-controls">
@@ -242,7 +253,7 @@ export function Workbench({ profile }: { profile: Profile }) {
                 {completed.length > 0 && <span>{pauses} Min. Pause</span>}</div>
               <div className="entry-net">{completed.length ? `${duration(worked)} Std.` : "–"}</div>
               <span className={`entry-status entry-status--${status}`}>{statusText[status]}</span>
-              {rows.length === 1 && unlocked && timeline.length === 1 && <button type="button" disabled={pending} className="entry-edit" onClick={() => setCorrection(first)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
+              {rows.length === 1 && unlocked && timeline.length === 1 && <button type="button" disabled={pending} className="entry-edit" onClick={() => openCorrection(first)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
             </div>
             {rows.length > 1 && <details className="daily-entry-details"><summary>Buchungsdetails{rows.some((entry) => entry.status === "submitted") && " · Antrag offen"}</summary>
               {rows.map((entry) => <div key={entry.id} className="entry-line">
@@ -250,16 +261,17 @@ export function Workbench({ profile }: { profile: Profile }) {
                   {entry.note && <span>{entry.note}</span>}</div>
                 <span className="text-slate-600">{entry.break_minutes} Min. Pause</span>
                 <span className={`entry-status entry-status--${entry.status}`}>{statusText[entry.status]}</span>
-                {unlocked && ["open", "recorded", "approved"].includes(entry.status) && <button type="button" disabled={pending} className="entry-edit" onClick={() => setCorrection(entry)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
+                {unlocked && ["open", "recorded", "approved"].includes(entry.status) && <button type="button" disabled={pending} className="entry-edit" onClick={() => openCorrection(entry)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
               </div>)}
             </details>}
           </div>;
         })}
       </section>
-        {correction && <section className={card}>
-          <h2 className="text-lg font-semibold">{source ? "Buchung korrigieren" : "Zeit nachtragen"}</h2>
+        {proof && <MonthlyProof member={profile.id} name={profile.name} month={month} onClose={() => setProof(false)} />}
+        {correction && <Modal title={source ? "Buchung korrigieren" : "Zeit nachtragen"} busy={pending} onClose={() => setCorrection(null)}>
+          <Message notice={message} />
           <form key={source?.id ?? "new"} onSubmit={submitCorrection} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label>Beginn<input type="datetime-local" name="started" required defaultValue={source ? localInput(source.started_at) : (mode === "week" ? monday : monthPeriod.toPlainDate({ day: 1 })).toString() + "T08:00"} className={field} /></label>
+            <label>Beginn<input type="datetime-local" name="started" autoFocus required defaultValue={source ? localInput(source.started_at) : (mode === "week" ? monday : monthPeriod.toPlainDate({ day: 1 })).toString() + "T08:00"} className={field} /></label>
             <label>Ende<input type="datetime-local" name="ended" required defaultValue={source?.ended_at ? localInput(source.ended_at) : ""} className={field} /></label>
             <label>Pause (Minuten)<input type="number" name="pause" min="0" step="1" placeholder="Automatisch" defaultValue={source?.break_adjusted ? source.break_minutes : ""} className={field} /></label>
             <label>Notiz (optional)<input name="note" maxLength={500} defaultValue={source?.note ?? ""} className={field} /></label>
@@ -269,7 +281,7 @@ export function Workbench({ profile }: { profile: Profile }) {
               <button type="button" className="underline" onClick={() => setCorrection(null)} disabled={pending}>Abbrechen</button>
             </div>
           </form>
-        </section>}
+        </Modal>}
     </div>
   );
 }

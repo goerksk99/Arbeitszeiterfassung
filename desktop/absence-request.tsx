@@ -1,6 +1,7 @@
 import { CalendarPlus, Coffee, HeartPulse, Palmtree, CalendarDays } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { berlinDate, type AbsenceType } from "../lib/work-time";
+import { Modal } from "./modal";
 import { supabase, type Profile } from "./supabase";
 import { absenceColors, absenceLabels, absenceStatus, button, card, dayLabel, field, listMembers, Message, requestError, type Member, type Notice } from "./ui";
 
@@ -10,7 +11,8 @@ const kinds = [
 ] as const;
 type Request = { id: string; type: AbsenceType; start_date: string; end_date: string; status: keyof typeof absenceStatus };
 
-export function AbsenceRequest({ profile }: { profile: Profile }) {
+export function AbsenceRequest({ profile, initialOpen = false }: { profile: Profile; initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
   const [kind, setKind] = useState<AbsenceType>("vacation");
   const [direct, setDirect] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -69,6 +71,7 @@ export function AbsenceRequest({ profile }: { profile: Profile }) {
         });
       if (response.error) throw response.error;
       form.reset();
+      setOpen(false);
       setNotice({ text: direct ? "Abwesenheit eingetragen und genehmigt." : "Antrag abgeschickt. Du siehst den Status unter „Meine Anträge“." });
       setRefresh((count) => count + 1);
     } catch (error) { setNotice({ text: requestError(error), error: true }); }
@@ -77,8 +80,7 @@ export function AbsenceRequest({ profile }: { profile: Profile }) {
 
   return (
     <div className="space-y-5">
-      <section className={card}>
-        <h2 className="panel-heading">{admin && direct ? "Abwesenheit eintragen" : "Neuer Antrag"}</h2>
+      {open && <Modal title={admin && direct ? "Abwesenheit eintragen" : "Neuer Abwesenheitsantrag"} busy={busy} onClose={() => setOpen(false)}>
         {admin && <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={direct}
           disabled={busy} onChange={(event) => { setDirect(event.target.checked); setNotice(undefined); }} />Für jemanden direkt eintragen und genehmigen</label>}
         <form onSubmit={submit} className="mt-5 space-y-4">
@@ -100,11 +102,17 @@ export function AbsenceRequest({ profile }: { profile: Profile }) {
           </div>
           <label className="block">Notiz (optional)<textarea name="note" className={field} maxLength={500} rows={2} /></label>
           <button className={button} disabled={busy || (direct && !members.length)}><CalendarPlus size={18} aria-hidden="true" />{direct ? "Eintragen" : "Antrag abschicken"}</button>
-          <Message notice={notice} />
+          <Message notice={notice?.error ? notice : undefined} />
         </form>
-      </section>
+      </Modal>}
       <section className={card}>
-        <h2 className="panel-heading">Meine Anträge</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="panel-heading">Meine Anträge</h2>
+          <button className={button} type="button" onClick={() => { setDirect(false); setKind("vacation"); setNotice(undefined); setOpen(true); }}>
+            <CalendarPlus size={18} aria-hidden="true" />Neuer Antrag
+          </button>
+        </div>
+        {!open && notice && <div className="mt-3"><Message notice={notice} /></div>}
         {historyError ? <p className="muted-notice" role="alert">Die Anträge konnten nicht geladen werden.</p>
           : !requests ? <p className="muted-notice">Anträge werden geladen …</p>
           : !requests.length ? <p className="muted-notice">Du hast noch keine Abwesenheiten eingetragen.</p>

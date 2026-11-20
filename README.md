@@ -180,3 +180,25 @@ Mitarbeiter verwalten**, klappt das Profil auf und wählt **Passwort
 zurücksetzen**. Das neue Startpasswort persönlich weitergeben. Die
 Mitarbeiterin oder der Mitarbeiter kann es nach dem Anmelden über
 **Passwort ändern** ersetzen.
+
+## Windows-Version 0.7.0
+
+Für dieses Update genügt das Windows-Startpaket. Vor dem Entpacken
+die App beenden. Falls sie bereits als Punkt im Windows-Infobereich
+läuft, dort per Rechtsklick **Beenden** wählen. Danach im vorhandenen
+App-Ordner entpacken und den Starter wieder öffnen.
+
+- Der Teamstatus zeigt eine Stempeluhr-Karte pro aktivem Mitarbeiter
+  mit Start, Ende und einem Timer während der Arbeit oder Pause.
+- Ausgeschiedene Mitarbeitende über **Aktiv** deaktivieren und speichern.
+  Ihre Profile stehen dann unten unter **Inaktive Mitarbeitende**.
+  Historische Buchungen und Berichte bleiben erhalten.
+- Abwesenheitsanträge, Nachträge und Korrekturen öffnen sich als Dialog.
+- **Monatsnachweis als PDF** ist in der Monatsansicht der eigenen
+  Arbeitszeiten und in der Admin-Ansicht für einen ausgewählten
+  Mitarbeiter verfügbar. Der Nachweis hat Platz für beide Unterschriften.
+- In Windows erscheint bei laufender App ein Punkt im Infobereich.
+  Grün bedeutet eingestempelt, Gelb Pause, Grau ausgestempelt.
+  Das Rechtsklickmenü steuert Stempeln und Pausen.
+  Beim Schließen des Fensters bleibt die angemeldete App im Hintergrund.
+  **Beenden** im Rechtsklickmenü schließt sie vollständig.

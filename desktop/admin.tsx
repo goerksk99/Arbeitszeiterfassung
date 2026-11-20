@@ -1,3 +1,4 @@
+import { Clock3 } from "lucide-react";
 import { Temporal } from "@js-temporal/polyfill";
 import { useEffect, useState, type FormEvent } from "react";
 import { berlinDate, COMPANY_ZONE, type AbsenceType } from "../lib/work-time";
@@ -219,6 +220,34 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
     </div>;
   }
 
+  const staffData = data;
+  function memberCard(member: Member) {
+    return <details key={member.id} className="staff-member-details">
+          <summary><strong>{member.full_name}</strong> <DepartmentBadge department={member.department} /></summary>
+          <form onSubmit={(event) => saveMember(event, member)} className="grid items-end gap-3 p-4 sm:grid-cols-2">
+          <label>Name<input className={field} name="name" defaultValue={member.full_name} required maxLength={120} /></label>
+          <label>Wochenstunden<input className={field} name="hours" type="number" min="0" max="168" step="0.01" defaultValue={member.weekly_hours} required /></label>
+          <label>Jahresurlaub (Tage)<input className={field} name="leave" type="number" min="0" max="366" step="0.01" defaultValue={member.annual_leave_days} required /></label>
+          <label>Abteilung<select className={field} name="department" defaultValue={member.department ?? ""}><DepartmentOptions optional /></select></label>
+          {staffData.groups.length > 0 && <fieldset className="sm:col-span-2">
+            <legend className="text-sm font-semibold">Teamgruppen</legend>
+            <div className="mt-2 flex flex-wrap gap-3">{staffData.groups.map((group) => <label key={group.id} className="flex items-center gap-1.5">
+              <input type="checkbox" name="group" value={group.id} defaultChecked={staffData.membership.some((row) => row.user_id === member.id && row.group_id === group.id)} />{group.name}
+            </label>)}</div>
+          </fieldset>}
+          <label className="py-2"><input name="active" type="checkbox" defaultChecked={member.is_active} disabled={profile.id === member.id} className="mr-2" />Aktiv</label>
+          <button className={secondary} disabled={busy}>Speichern</button>
+          </form>
+          {member.role === "employee" && member.is_active && <details className="staff-reset">
+            <summary>Passwort zurücksetzen</summary>
+            <form onSubmit={(event) => resetPassword(event, member)} className="mt-3 flex flex-wrap items-end gap-3">
+              <label>Neues Startpasswort<input className={field} name="password" type="password" autoComplete="new-password" minLength={12} maxLength={72} required /></label>
+              <button className={secondary} disabled={busy}>Startpasswort setzen</button>
+            </form>
+          </details>}
+        </details>;
+  }
+
   return (
     <div className="space-y-5">
       <Message notice={notice ?? loadError} />
@@ -227,25 +256,19 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           <h2 className="text-lg font-semibold">Teamstatus heute</h2>
           <button className={secondary} disabled={busy} onClick={reload}>Aktualisieren</button>
         </div>
-        <ul className="mt-3 divide-y divide-slate-200">
+        <div className="team-clock-grid">
           {data.members.filter((member) => member.is_active).map((member) => {
-            const open = data.open.find((entry) => entry.user_id === member.id);
-            const away = data.awayToday.find((entry) => entry.user_id === member.id);
-            const paused = data.paused.find((pause) => pause.user_id === member.id);
-            const shifts = data.shifts.filter((shift) => shift.user_id === member.id);
-            const booked = shifts.map((shift) => shift.started_at).filter((stamp) => berlinDate(stamp) === today).sort();
-            const ended = shifts.flatMap((shift) => shift.ended_at ? [shift.ended_at] : []).filter((stamp) => berlinDate(stamp) === today).sort();
-            return <li key={member.id} className="staff-status-row">
-              <div><strong>{member.full_name}</strong><div><DepartmentBadge department={member.department} /></div></div>
-              <div><small>Erstes Einstempeln</small><strong>{booked[0] ? time.format(Date.parse(booked[0])) + " Uhr" : "–"}</strong></div>
-              <div><small>Letztes Ausstempeln</small><strong>{ended.length ? time.format(Date.parse(ended.at(-1)!)) + " Uhr" : "–"}</strong></div>
-              <span className={`entry-status ${paused ? "entry-status--rejected" : open ? "entry-status--recorded" : ""}`}>
-                {paused ? <PauseTimer startedAt={paused.paused_at} /> : open ? (berlinDate(open.started_at) === today ? "Eingestempelt" : "Offene Buchung vom Vortag")
-                  : away ? "Abwesend · " + absenceLabels[away.type] : "Ausgestempelt"}
-              </span>
-            </li>;
+            const open = data.open.find((item) => item.user_id === member.id);
+            const away = data.awayToday.find((item) => item.user_id === member.id);
+            const paused = data.paused.find((item) => item.user_id === member.id);
+            const shifts = data.shifts.filter((item) => item.user_id === member.id);
+            const starts = shifts.map((item) => item.started_at).filter((stamp) => berlinDate(stamp) === today).map(Date.parse);
+            const ends = shifts.flatMap((item) => item.ended_at ? [item.ended_at] : []).filter((stamp) => berlinDate(stamp) === today).map(Date.parse);
+            return <TeamClock key={member.id} member={member} open={open} away={away}
+              pauseStart={paused?.paused_at} first={starts.length ? Math.min(...starts) : undefined}
+              last={ends.length ? Math.max(...ends) : undefined} />;
           })}
-        </ul>
+        </div>
       </section>}
       {section === "requests" && <section className={card}>
         <h2 className="text-lg font-semibold">Anträge und offene Buchungen</h2>
@@ -284,30 +307,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
       {section === "staff" && <>
       <section className={card}>
         <h2 className="text-lg font-semibold">Mitarbeiter verwalten</h2>
-        {data.members.map((member) => <details key={member.id} className="staff-member-details">
-          <summary><strong>{member.full_name}</strong> <DepartmentBadge department={member.department} /></summary>
-          <form onSubmit={(event) => saveMember(event, member)} className="grid items-end gap-3 p-4 sm:grid-cols-2">
-          <label>Name<input className={field} name="name" defaultValue={member.full_name} required maxLength={120} /></label>
-          <label>Wochenstunden<input className={field} name="hours" type="number" min="0" max="168" step="0.01" defaultValue={member.weekly_hours} required /></label>
-          <label>Jahresurlaub (Tage)<input className={field} name="leave" type="number" min="0" max="366" step="0.01" defaultValue={member.annual_leave_days} required /></label>
-          <label>Abteilung<select className={field} name="department" defaultValue={member.department ?? ""}><DepartmentOptions optional /></select></label>
-          {data.groups.length > 0 && <fieldset className="sm:col-span-2">
-            <legend className="text-sm font-semibold">Teamgruppen</legend>
-            <div className="mt-2 flex flex-wrap gap-3">{data.groups.map((group) => <label key={group.id} className="flex items-center gap-1.5">
-              <input type="checkbox" name="group" value={group.id} defaultChecked={data.membership.some((row) => row.user_id === member.id && row.group_id === group.id)} />{group.name}
-            </label>)}</div>
-          </fieldset>}
-          <label className="py-2"><input name="active" type="checkbox" defaultChecked={member.is_active} disabled={profile.id === member.id} className="mr-2" />Aktiv</label>
-          <button className={secondary} disabled={busy}>Speichern</button>
-          </form>
-          {member.role === "employee" && member.is_active && <details className="staff-reset">
-            <summary>Passwort zurücksetzen</summary>
-            <form onSubmit={(event) => resetPassword(event, member)} className="mt-3 flex flex-wrap items-end gap-3">
-              <label>Neues Startpasswort<input className={field} name="password" type="password" autoComplete="new-password" minLength={12} maxLength={72} required /></label>
-              <button className={secondary} disabled={busy}>Startpasswort setzen</button>
-            </form>
-          </details>}
-        </details>)}
+        {data.members.filter((member) => member.is_active).map(memberCard)}
         <h3 className="mt-6 font-medium">Mitarbeiterkonto anlegen</h3>
         <form onSubmit={createMember} className="mt-3 grid gap-3 sm:grid-cols-2">
           <label>Name<input className={field} name="name" required maxLength={120} /></label>
@@ -333,6 +333,13 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           <button className={button} disabled={busy}>Teamgruppe anlegen</button>
         </form>
       </section>
+      {data.members.some((member) => !member.is_active) && <section className={`${card} inactive-staff`}>
+        <details>
+          <summary>Inaktive Mitarbeitende <span className="entry-status">{data.members.filter((member) => !member.is_active).length}</span></summary>
+          <p className="muted-notice">Die Anmeldung ist gesperrt. Buchungen und Monatsnachweise bleiben erhalten.</p>
+          {data.members.filter((member) => !member.is_active).map(memberCard)}
+        </details>
+      </section>}
       </>}
       {section === "break" && <section className={card}>
         <h2 className="text-lg font-semibold">Automatische Mittagspause</h2>
@@ -347,12 +354,28 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
 }
 
 
-function PauseTimer({ startedAt }: { startedAt: string }) {
+function TeamClock({ member, open, away, pauseStart, first, last }: {
+  member: Member; open?: OpenEntry; away?: AbsenceRequest; pauseStart?: string; first?: number; last?: number;
+}) {
   const [now, setNow] = useState(Date.now);
+  const runningSince = pauseStart ?? open?.started_at;
   useEffect(() => {
+    if (!runningSince) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, []);
-  const seconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000));
-  return <span className="team-pause-timer">In Pause · {duration(Math.floor(seconds / 60))}:{String(seconds % 60).padStart(2, "0")}</span>;
+  }, [runningSince]);
+
+  const status = pauseStart ? "In Pause" : open ? "Eingestempelt" : away ? "Abwesend" : "Ausgestempelt";
+  const seconds = runningSince ? Math.max(0, Math.floor((now - Date.parse(runningSince)) / 1000)) : 0;
+  const counter = `${duration(Math.floor(seconds / 60)).padStart(5, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  return <article className={`team-clock ${pauseStart ? "team-clock--pause" : open ? "team-clock--work" : ""}`}>
+    <header><div><h3>{member.full_name}</h3><DepartmentBadge department={member.department} /></div><Clock3 size={21} aria-hidden="true" /></header>
+    <span className={`status-chip ${pauseStart ? "status-chip--pause" : open ? "status-chip--work" : ""}`}><span aria-hidden="true" />{status}</span>
+    {runningSince ? <>
+      <p className="team-clock-counter">{counter}</p>
+      <p className="team-clock-caption">{pauseStart ? "Laufende Pause" : "Seit Einstempeln"} · {time.format(Date.parse(runningSince))} Uhr</p>
+    </> : <p className="team-clock-caption">{away ? absenceLabels[away.type] : "Keine offene Buchung"}</p>}
+    <dl><div><dt>Erstes Einstempeln</dt><dd>{first !== undefined ? time.format(first) + " Uhr" : "–"}</dd></div>
+      <div><dt>Letztes Ausstempeln</dt><dd>{last !== undefined ? time.format(last) + " Uhr" : "–"}</dd></div></dl>
+  </article>;
 }

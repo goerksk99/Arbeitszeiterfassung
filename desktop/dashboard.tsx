@@ -12,8 +12,8 @@ type Decision = { id: string; title: string; detail: string; status: FinalStatus
 type Leave = { type: AbsenceType; start_date: string; end_date: string };
 type Data = { time: number; leave: number; decisions: Decision[]; absences: Leave[]; holidays: Map<string, string> };
 
-export function Dashboard({ profile, onEntries, onCalendar, onRequests }: {
-  profile: Profile; onEntries: () => void; onCalendar: (day?: string) => void; onRequests: () => void;
+export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockProblem }: {
+  profile: Profile; onEntries: () => void; onCalendar: (day?: string) => void; onRequests: () => void; onClockProblem: () => void;
 }) {
   const [data, setData] = useState<Data>();
   const [notice, setNotice] = useState<Notice>();
@@ -81,7 +81,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests }: {
   const count = (data?.time ?? 0) + (data?.leave ?? 0);
   const days = Array.from({ length: 7 }, (_, index) => monday.add({ days: index }));
   return <div className="dashboard">
-    <Clock profile={profile} onEntries={onEntries} />
+    <Clock profile={profile} onEntries={onEntries} onTrayError={onClockProblem} />
     <Message notice={notice} />
     {notice && <button className={secondary} onClick={() => setRefresh((value) => value + 1)}>Erneut laden</button>}
     <div className="dashboard-grid">

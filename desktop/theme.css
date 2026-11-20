@@ -182,8 +182,6 @@ label { color: inherit; }
 .admin-subnav .nav-button { font-size: 12px; min-height: 35px; padding-block: 6px; white-space: normal; }
 .request-count { display: inline-grid; place-items: center; min-width: 21px; min-height: 20px; padding: 1px 5px; border-radius: 99px; background: #fde3aa; color: #513810; font-size: 11px; font-weight: 750; }
 .submission-notice { margin-top: 12px; padding: 10px 13px; background: #fff4dc; border: 1px solid #f1ddb0; border-radius: 9px; color: #634817; font-size: 14px; }
-.staff-status-row { display: grid; grid-template-columns: minmax(135px, 1.4fr) repeat(2, minmax(108px, 1fr)) minmax(124px, auto); gap: 10px; align-items: center; padding: 13px 0; font-size: 14px; }
-.staff-status-row small { display: block; color: var(--muted); margin-bottom: 3px; }
 .department-badge { display: inline-flex; width: fit-content; border-radius: 99px; margin-top: 3px; padding: 3px 8px; background: #edf1f5; color: #485d71; font-size: 11px; font-weight: 680; white-space: nowrap; }
 .department-management { background: #ede7f7; color: #5a3e75; }
 .department-sales { background: #e1f2e9; color: #235d49; }
@@ -211,9 +209,6 @@ label { color: inherit; }
 .calendar-details p { margin-top: 2px; color: var(--muted); font-size: 13px; }
 .calendar-group-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .calendar-group-tags span { padding: 2px 6px; border-radius: 6px; background: #eaf0f5; color: #455a75; font-size: 11px; }
-@media (max-width: 850px) {
-  .staff-status-row { grid-template-columns: repeat(2, minmax(90px, 1fr)); }
-}
 @media (max-width: 570px) {
   .admin-subnav { width: 100%; display: flex; flex-wrap: wrap; }
   .calendar-cell { min-height: 57px; padding: 2px; }
@@ -245,8 +240,29 @@ label { color: inherit; }
 .dashboard-decisions { margin-top: 8px; }
 .dashboard-decisions li { display: flex; align-items: center; justify-content: space-between; gap: 9px; border-bottom: 1px solid #e5ebf2; padding: 9px 0; font-size: 14px; }
 .dashboard-decisions .entry-status { gap: 5px; align-items: center; }
-.team-pause-timer { font-variant-numeric: tabular-nums; }
 .staff-reset { border-top: 1px solid #e1e8f0; padding: 10px 16px; font-size: 13px; }
 .staff-reset summary, .login-recovery summary { color: var(--green); font-weight: 650; }
 .login-recovery p { color: var(--muted); font-size: 14px; margin-top: 9px; }
 @media (max-width: 830px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+.team-clock-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,245px),1fr)); gap: 12px; }
+.team-clock { padding: 16px; border-radius: 15px; color: #fff; background: #26354b; display: flex; flex-direction: column; min-width: 0; }
+.team-clock--work { background: linear-gradient(135deg,#172a40,#204759); }
+.team-clock--pause { background: linear-gradient(135deg,#362733,#533340); }
+.team-clock header, .team-clock dl { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.team-clock header svg { color: #cbdcf0; flex-shrink: 0; }
+.team-clock h3 { font-size: 17px; font-weight: 740; overflow-wrap: anywhere; }
+.team-clock .status-chip { align-self: flex-start; margin-top: 11px; }
+.team-clock-counter { margin-top: 7px; font-size: 30px; font-weight: 730; font-variant-numeric: tabular-nums; line-height: 1; }
+.team-clock-caption { margin: 7px 0 12px; color: #d4dfed; font-size: 12px; }
+.team-clock dl { margin-top: auto; padding-top: 10px; border-top: 1px solid #ffffff30; flex-wrap: wrap; }
+.team-clock dt { color: #d0dceb; font-size: 11px; }
+.team-clock dd { font-size: 14px; font-weight: 680; }
+.inactive-staff { background: #f6f8fa; color: #435269; }
+.inactive-staff summary { font-weight: 680; }
+.app-modal { width: min(90vw, 670px); max-height: 88vh; margin: auto; border: 1px solid #d3e0ec; border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 22px 60px #0c1a3450; }
+.app-modal::backdrop { background: #10213b85; }
+.modal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 20px; border-bottom: 1px solid var(--line); }
+.modal-heading h2 { font-weight: 740; font-size: 20px; }
+.modal-heading button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #edf3f7; }
+.modal-content { padding: 19px 20px; }

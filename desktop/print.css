@@ -12,3 +12,24 @@
   .report-print tr { break-inside: avoid; }
   .print-month { display: block; }
 }
+
+.pdf-print-root { display: none; }
+.proof-sheet header h2 { font-size: 21px; font-weight: 740; }
+.proof-sheet header p { font-size: 15px; font-weight: 650; }
+.proof-sheet header small, .proof-note { color: #4b5c6c; }
+.proof-sheet table { width: 100%; margin: 12px 0 8px; border-collapse: collapse; font-size: 13px; text-align: left; font-variant-numeric: tabular-nums; }
+.proof-sheet th, .proof-sheet td { border-bottom: 1px solid #dae3ea; padding: 4px 6px; }
+.proof-sheet thead, .proof-sheet tfoot { background: #edf2f6; font-weight: 740; }
+.proof-sheet tbody th { font-weight: 550; }
+.proof-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 31px; break-inside: avoid; }
+.proof-signatures div { padding-top: 5px; border-top: 1px solid #253345; font-size: 12px; }
+
+@page proof-page { size: A4 portrait; margin: 13mm; }
+@media print {
+  body:has(.pdf-print-root) > :not(.pdf-print-root) { display: none !important; }
+  body:has(.pdf-print-root) .app-modal::backdrop { display: none !important; }
+  .pdf-print-root { display: block; page: proof-page; color: #000; }
+  .pdf-print-root .proof-sheet th, .pdf-print-root .proof-sheet td { font-size: 9pt; line-height: 1.2; padding: .75mm 1.5mm; }
+  .pdf-print-root .proof-sheet tr { break-inside: avoid; }
+  .pdf-print-root .proof-signatures { margin-top: 15mm; }
+}
