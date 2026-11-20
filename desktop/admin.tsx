@@ -9,7 +9,7 @@ type Correction = { id: string; user_id: string; started_at: string; ended_at: s
 type OpenEntry = { id: string; user_id: string; started_at: string };
 type AbsenceRequest = { id: string; user_id: string; type: AbsenceType; start_date: string; end_date: string; note: string | null };
 type Data = {
-  members: Member[]; corrections: Correction[]; open: OpenEntry[];
+  members: Member[]; corrections: Correction[]; open: OpenEntry[]; paused: string[];
   absences: AbsenceRequest[]; awayToday: AbsenceRequest[];
   settings: { auto_break_start: string; auto_break_minutes: number };
 };
@@ -34,21 +34,22 @@ export function Admin({ profile }: { profile: Profile }) {
     const controller = new AbortController();
     async function load() {
       const signal = controller.signal;
-      const [members, corrections, open, absences, awayToday, settings] = await Promise.all([
+      const [members, corrections, open, absences, awayToday, settings, pauses] = await Promise.all([
         listMembers(signal),
         supabase.from("time_entries").select("id,user_id,started_at,ended_at,break_minutes,correction_reason,note").eq("status", "submitted").order("created_at").abortSignal(signal),
         supabase.from("time_entries").select("id,user_id,started_at").eq("status", "open").abortSignal(signal),
         supabase.from("absences").select("id,user_id,type,start_date,end_date,note").eq("status", "submitted").order("created_at").abortSignal(signal),
         supabase.from("absences").select("id,user_id,type,start_date,end_date,note").eq("status", "approved").lte("start_date", today).gte("end_date", today).abortSignal(signal),
         supabase.from("company_settings").select("auto_break_start,auto_break_minutes").eq("id", 1).abortSignal(signal).single(),
+        supabase.rpc("admin_paused_members").abortSignal(signal),
       ]);
-      const error = corrections.error ?? open.error ?? absences.error ?? awayToday.error ?? settings.error;
+      const error = corrections.error ?? open.error ?? absences.error ?? awayToday.error ?? settings.error ?? (pauses.error?.code === "PGRST202" ? null : pauses.error);
       if (error) throw error;
       if (signal.aborted) return;
       setData({
         members, corrections: corrections.data as Correction[], open: open.data as OpenEntry[],
         absences: absences.data as AbsenceRequest[], awayToday: awayToday.data as AbsenceRequest[],
-        settings: settings.data!,
+        settings: settings.data!, paused: (pauses.data ?? []) as string[],
       });
       setLoadError(undefined);
     }
@@ -180,9 +181,13 @@ export function Admin({ profile }: { profile: Profile }) {
           {data.members.filter((member) => member.is_active).map((member) => {
             const open = data.open.find((entry) => entry.user_id === member.id);
             const away = data.awayToday.find((entry) => entry.user_id === member.id);
+            const isPaused = data.paused.includes(member.id);
             return <li key={member.id} className="flex flex-wrap justify-between gap-2 py-2">
               <span>{member.full_name}</span>
-              <span>{open ? (berlinDate(open.started_at) === today ? "Eingestempelt" : "Offene Buchung vom Vortag") : away ? "Abwesend · " + absenceLabels[away.type] : "Ausgestempelt"}</span>
+              <span className={`entry-status ${isPaused ? "entry-status--rejected" : open ? "entry-status--recorded" : ""}`}>
+                {isPaused ? "In Pause" : open ? (berlinDate(open.started_at) === today ? "Eingestempelt" : "Offene Buchung vom Vortag")
+                  : away ? "Abwesend · " + absenceLabels[away.type] : "Ausgestempelt"}
+              </span>
             </li>;
           })}
         </ul>

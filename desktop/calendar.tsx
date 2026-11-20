@@ -1,8 +1,8 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { useEffect, useState, type FormEvent } from "react";
-import { type AbsenceType, berlinDate } from "../lib/work-time";
+import { useEffect, useState } from "react";
+import { type AbsenceType } from "../lib/work-time";
 import { supabase, type Profile } from "./supabase";
-import { absenceColors, absenceLabels, absenceStatus, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, requestError, secondary, type Member, type Notice } from "./ui";
+import { absenceColors, absenceLabels, absenceStatus, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, secondary, type Member, type Notice } from "./ui";
 
 type CalendarEntry = {
   id: string; user_id: string; full_name: string; type: AbsenceType;
@@ -43,7 +43,7 @@ function MonthGrid({ month, items, compact, selected, selectDay }: {
   );
 }
 
-export function Calendar({ profile }: { profile: Profile }) {
+export function Calendar({ profile, onRequest }: { profile: Profile; onRequest: () => void }) {
   const [month, setMonth] = useState(monthNow);
   const [yearMode, setYearMode] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
@@ -51,11 +51,8 @@ export function Calendar({ profile }: { profile: Profile }) {
   const [member, setMember] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
-  const [reload, setReload] = useState(0);
-  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<Notice>();
-  const [notice, setNotice] = useState<Notice>();
   const admin = profile.role === "admin";
 
   useEffect(() => {
@@ -64,7 +61,7 @@ export function Calendar({ profile }: { profile: Profile }) {
     void listMembers(controller.signal).then((rows) => {
       if (!controller.signal.aborted) setMembers(rows);
     }).catch(() => {
-      if (!controller.signal.aborted) setNotice({ text: "Mitarbeiterliste konnte nicht geladen werden.", error: true });
+      if (!controller.signal.aborted) setLoadError({ text: "Mitarbeiterliste konnte nicht geladen werden.", error: true });
     });
     return () => controller.abort();
   }, [admin]);
@@ -87,36 +84,7 @@ export function Calendar({ profile }: { profile: Profile }) {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [month, yearMode, reload]);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const first = String(data.get("from"));
-    const last = String(data.get("until"));
-    const kind = String(data.get("kind")) as AbsenceType;
-    const note = String(data.get("note") ?? "").trim();
-    if (first > last) { setNotice({ text: "Das Enddatum muss am oder nach dem Startdatum liegen.", error: true }); return; }
-
-    setBusy(true);
-    setNotice(undefined);
-    try {
-      const result = admin
-        ? await supabase.rpc("record_absence", { member_id: String(data.get("member")), kind, first_day: first, last_day: last, entry_note: note })
-        : await supabase.from("absences").insert({ user_id: profile.id, type: kind, start_date: first, end_date: last, note: note || null, status: "submitted" });
-      if (result.error) throw result.error;
-      setNotice({ text: admin ? "Abwesenheit eingetragen und genehmigt." : "Abwesenheit zur Prüfung eingereicht." });
-      setYearMode(false);
-      setMonth(first.slice(0, 7));
-      setSelectedDay(first);
-      setFilter(kinds);
-      setMember("");
-      form.reset();
-      setReload((value) => value + 1);
-    } catch (error) { setNotice({ text: requestError(error), error: true }); }
-    finally { setBusy(false); }
-  }
+  }, [month, yearMode]);
 
   const currentMonth = Temporal.PlainYearMonth.from(month);
   const items = entries.filter((item) => filter.includes(item.type) && (!member || item.user_id === member));
@@ -130,7 +98,8 @@ export function Calendar({ profile }: { profile: Profile }) {
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Teamkalender</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button className={secondary} onClick={onRequest}>Abwesenheit beantragen</button>
             <button className={yearMode ? secondary : button} aria-pressed={!yearMode} onClick={() => { setYearMode(false); setSelectedDay(""); }}>Monat</button>
             <button className={yearMode ? button : secondary} aria-pressed={yearMode} onClick={() => { setYearMode(true); setSelectedDay(""); }}>Jahr</button>
           </div>
@@ -164,20 +133,6 @@ export function Calendar({ profile }: { profile: Profile }) {
             </li>)}
           </ul> : <p className="mt-2 text-sm text-slate-600">Keine Abwesenheiten für diese Auswahl.</p>}
         </div>}
-      </section>
-      <section className={card}>
-        <h2 className="text-lg font-semibold">{admin ? "Abwesenheit eintragen und genehmigen" : "Abwesenheit beantragen"}</h2>
-        <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
-          {admin && <label>Mitarbeiter<select name="member" className={field} required defaultValue={profile.id}>
-            {members.filter((person) => person.is_active).map((person) => <option key={person.id} value={person.id}>{person.full_name}</option>)}
-          </select></label>}
-          <label>Art<select name="kind" className={field}>{kinds.map((kind) => <option key={kind} value={kind}>{absenceLabels[kind]}</option>)}</select></label>
-          <label>Von<input name="from" type="date" className={field} defaultValue={berlinDate(new Date().toISOString())} required /></label>
-          <label>Bis<input name="until" type="date" className={field} defaultValue={berlinDate(new Date().toISOString())} required /></label>
-          <label className="sm:col-span-2">Notiz (optional)<input name="note" className={field} maxLength={500} /></label>
-          <div><button className={button} disabled={busy || (admin && !members.some((person) => person.is_active))}>{admin ? "Eintragen" : "Antrag einreichen"}</button></div>
-        </form>
-        <div className="mt-3"><Message notice={notice} /></div>
       </section>
     </div>
   );

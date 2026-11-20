@@ -108,3 +108,21 @@ Ein Abschluss ist ab dem ersten Tag des Folgemonats möglich. Nach dem ersten
 Abschluss folgen weitere Monate in chronologischer Reihenfolge, damit der
 Übertrag vollständig bleibt. Zeit über Mitternacht gehört zum Berliner
 Startdatum. Ganztägige Abwesenheiten zählen auf Montag bis Freitag.
+
+## Windows-Version 0.4.0
+
+Arbeitszeiten lassen sich nach ISO-Kalenderwoche oder Monat auswählen.
+Unter **Abwesenheit beantragen** können Mitarbeitende Anträge einreichen
+und deren Status überprüfen. Admins können dort zusätzlich direkt
+genehmigte Abwesenheiten eintragen.
+
+Im Supabase SQL Editor die neue
+[Pausen-Migration](supabase/migrations/20261120030000_live_breaks.sql)
+einmal vollständig ausführen. Danach lässt sich eine Pause per Klick
+starten und beenden. Gestempelte Pausen ergeben beim Ausstempeln den
+Pausenabzug in vollen Minuten. Bei einer Buchung ohne gestempelte Pause
+gilt weiterhin die automatische Mittagspause. Eine ausdrücklich
+eingegebene Pausendauer hat Vorrang.
+
+Zum App-Update das laufende Fenster schließen, das Windows-Startpaket
+im vorhandenen App-Ordner entpacken und die Dateien ersetzen.

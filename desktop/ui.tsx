@@ -4,10 +4,10 @@ import { Temporal } from "@js-temporal/polyfill";
 import { berlinDate, type AbsenceType } from "../lib/work-time";
 import { supabase } from "./supabase";
 
-export const button = "rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50";
-export const secondary = "rounded-lg border border-slate-300 bg-white px-4 py-2 disabled:opacity-50";
-export const field = "mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2";
-export const card = "rounded-xl border border-slate-200 bg-white p-5";
+export const button = "btn disabled:opacity-50";
+export const secondary = "btn-secondary disabled:opacity-50";
+export const field = "text-field";
+export const card = "panel-card";
 export const absenceLabels: Record<AbsenceType, string> = {
   vacation: "Urlaub", sick: "Krankheit", comp_time: "Zeitausgleich", other: "Sonstiges",
 };
@@ -25,7 +25,7 @@ export const dayLabel = (day: string) => Temporal.PlainDate.from(day).toLocaleSt
 export const absenceStatus = { approved: "Genehmigt", submitted: "Zur Prüfung", rejected: "Abgelehnt" } as const;
 
 export function Message({ notice }: { notice?: Notice }) {
-  return notice && <p role={notice.error ? "alert" : "status"} className={notice.error ? "text-red-700" : "text-emerald-800"}>{notice.text}</p>;
+  return notice && <p role={notice.error ? "alert" : "status"} className={notice.error ? "app-notice app-notice--error" : "app-notice"}>{notice.text}</p>;
 }
 
 export function requestError(error: unknown) {

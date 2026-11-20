@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { CalendarDays, CalendarPlus, ClipboardList, Clock3, KeyRound, LogOut, Timer, UsersRound } from "lucide-react";
+import { Fragment } from "react";
 import "../app/globals.css";
 
 import { supabase, type Profile } from "./supabase";
@@ -7,16 +9,21 @@ import { Workbench } from "./workbench";
 import { Admin } from "./admin";
 import { Calendar } from "./calendar";
 import { Reports } from "./reports";
-import { button, PasswordForm, secondary } from "./ui";
+import { button, field, PasswordForm } from "./ui";
+import { Clock } from "./clock";
+import { AbsenceRequest } from "./absence-request";
+import "./theme.css";
 import "./print.css";
 
-type Screen = "work" | "calendar" | "admin" | "reports";
-const navigation: Array<{ screen: Screen; label: string; admin?: boolean }> = [
-  { screen: "work", label: "Stempeluhr" },
-  { screen: "calendar", label: "Kalender" },
-  { screen: "admin", label: "Admin", admin: true },
-  { screen: "reports", label: "Monatsberichte", admin: true },
-];
+type Screen = "work" | "entries" | "calendar" | "absence" | "admin" | "reports";
+const navigation = [
+  { screen: "work", label: "Stempeluhr", icon: Timer },
+  { screen: "entries", label: "Arbeitszeiten", icon: Clock3 },
+  { screen: "calendar", label: "Teamkalender", icon: CalendarDays },
+  { screen: "absence", label: "Abwesenheit beantragen", icon: CalendarPlus },
+  { screen: "admin", label: "Verwaltung", icon: UsersRound, admin: true },
+  { screen: "reports", label: "Monatsberichte", icon: ClipboardList, admin: true },
+] as const;
 
 function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -89,59 +96,69 @@ function App() {
     }
   }
 
-  const inputClass = "mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2";
-  const buttonClass = "w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-60";
-
   if (profile) {
+    const current = navigation.find((item) => item.screen === screen)!;
+    const initials = profile.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
     return (
-      <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 sm:px-6">
-        <div className="mx-auto max-w-5xl space-y-5">
-          <header className="no-print flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-600">Arbeitszeiterfassung</p>
-              <h1 className="text-2xl font-semibold">Willkommen, {profile.name}</h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button className={secondary} type="button" aria-expanded={passwordForm} disabled={pending} onClick={() => setPasswordForm(!passwordForm)}>Passwort ändern</button>
-              <button className={secondary} type="button" disabled={pending} onClick={signOut}>Abmelden</button>
-            </div>
-          </header>
-          {error && <p role="alert" className="no-print text-red-700">{error}</p>}
-          {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
-          <nav aria-label="Hauptnavigation" className="no-print flex flex-wrap gap-2">
-            {navigation.filter((item) => !item.admin || profile.role === "admin").map((item) => (
-              <button key={item.screen} type="button" className={screen === item.screen ? button : secondary}
-                aria-current={screen === item.screen ? "page" : undefined} onClick={() => setScreen(item.screen)}>{item.label}</button>
+      <main className="app-shell">
+        <aside className="sidebar no-print">
+          <div className="app-brand"><span className="brand-icon"><Clock3 size={22} aria-hidden="true" /></span><span>Arbeitszeiterfassung</span></div>
+          <nav aria-label="Hauptnavigation">
+            {navigation.filter((item) => !("admin" in item) || profile.role === "admin").map(({ screen: name, label, icon: Icon }) => (
+              <Fragment key={name}>
+                {name === "admin" && <p className="nav-heading">Administration</p>}
+                <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
+                  onClick={() => { setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>
+              </Fragment>
             ))}
           </nav>
-          {screen === "work" && <Workbench profile={profile} signingOut={pending} />}
-          {screen === "calendar" && <Calendar profile={profile} />}
-          {screen === "admin" && profile.role === "admin" && <Admin profile={profile} />}
-          {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
+          <div className="sidebar-account">
+            <div className="account-card">
+              <span className="account-avatar" aria-hidden="true">{initials}</span>
+              <div><strong>{profile.name}</strong><small>{profile.role === "admin" ? "Administrator" : "Mitarbeiterkonto"}</small></div>
+            </div>
+            <div className="account-actions">
+              <button className="nav-button" type="button" aria-expanded={passwordForm} disabled={pending}
+                onClick={() => { setPasswordForm(!passwordForm); window.scrollTo(0, 0); }}><KeyRound size={16} aria-hidden="true" />Passwort ändern</button>
+              <button className="nav-button" type="button" disabled={pending} onClick={signOut}><LogOut size={16} aria-hidden="true" />Abmelden</button>
+            </div>
+          </div>
+        </aside>
+        <div className="screen-area">
+          <div className="screen-frame space-y-5">
+            <header className="screen-header no-print">
+              <h1>{current.label}</h1>
+              {screen === "work" && <p>Willkommen, {profile.name}</p>}
+            </header>
+            {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
+            {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
+            {screen === "work" && <Clock profile={profile} onEntries={() => setScreen("entries")} />}
+            {screen === "entries" && <Workbench profile={profile} />}
+            {screen === "calendar" && <Calendar profile={profile} onRequest={() => setScreen("absence")} />}
+            {screen === "absence" && <AbsenceRequest profile={profile} />}
+            {screen === "admin" && profile.role === "admin" && <Admin profile={profile} />}
+            {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-100 px-4 py-10 text-slate-950">
-      <section className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-sm font-medium text-slate-600">Arbeitszeiterfassung</p>
-      <h1 className="mt-2 text-3xl font-semibold">Anmelden</h1>
-      <form onSubmit={signIn} className="mt-8 space-y-5">
-        <label className="block text-sm font-medium">
-          E-Mail-Adresse
-          <input name="email" type="email" required autoComplete="username" className={inputClass} />
-        </label>
-        <label className="block text-sm font-medium">
-          Passwort
-          <input name="password" type="password" required autoComplete="current-password" className={inputClass} />
-        </label>
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Anmeldung läuft …" : "Anmelden"}
-        </button>
-      </form>
+    <main className="login-screen">
+      <section className="login-panel">
+        <div className="app-brand"><span className="brand-icon"><Clock3 size={22} aria-hidden="true" /></span>Arbeitszeiterfassung</div>
+        <h1>Anmelden</h1>
+        <form onSubmit={signIn} className="mt-5 space-y-4">
+          <label className="block text-sm font-semibold">
+            E-Mail-Adresse<input name="email" type="email" required autoComplete="username" className={field} />
+          </label>
+          <label className="block text-sm font-semibold">
+            Passwort<input name="password" type="password" required autoComplete="current-password" className={field} />
+          </label>
+          {error && <p role="alert" className="app-notice app-notice--error">{error}</p>}
+          <button type="submit" disabled={pending} className={button}>{pending ? "Anmeldung läuft …" : "Anmelden"}</button>
+        </form>
       </section>
     </main>
   );

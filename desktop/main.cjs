@@ -28,8 +28,8 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   const window = new BrowserWindow({
     title: "Arbeitszeiterfassung",
-    width: 900,
-    height: 700,
+    width: 1120,
+    height: 760,
     minWidth: 420,
     minHeight: 520,
     autoHideMenuBar: true,
