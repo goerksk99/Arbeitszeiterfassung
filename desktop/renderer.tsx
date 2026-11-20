@@ -1,14 +1,30 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "../app/globals.css";
 
 import { supabase, type Profile } from "./supabase";
 import { Workbench } from "./workbench";
+import { Admin } from "./admin";
+import { Calendar } from "./calendar";
+import { Reports } from "./reports";
+import { button, PasswordForm, secondary } from "./ui";
+import "./print.css";
+
+type Screen = "work" | "calendar" | "admin" | "reports";
+const navigation: Array<{ screen: Screen; label: string; admin?: boolean }> = [
+  { screen: "work", label: "Stempeluhr" },
+  { screen: "calendar", label: "Kalender" },
+  { screen: "admin", label: "Admin", admin: true },
+  { screen: "reports", label: "Monatsberichte", admin: true },
+];
 
 function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [screen, setScreen] = useState<Screen>("work");
+  const [passwordForm, setPasswordForm] = useState(false);
+  useEffect(() => { window.scrollTo(0, 0); }, [screen]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,6 +80,8 @@ function App() {
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
       if (signOutError) throw signOutError;
       setProfile(null);
+      setScreen("work");
+      setPasswordForm(false);
     } catch {
       setError("Die Abmeldung ist fehlgeschlagen. Du kannst die App schließen, um die Sitzung zu beenden.");
     } finally {
@@ -75,7 +93,34 @@ function App() {
   const buttonClass = "w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-60";
 
   if (profile) {
-    return <Workbench profile={profile} onSignOut={signOut} signingOut={pending} signOutError={error} />;
+    return (
+      <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 sm:px-6">
+        <div className="mx-auto max-w-5xl space-y-5">
+          <header className="no-print flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-600">Arbeitszeiterfassung</p>
+              <h1 className="text-2xl font-semibold">Willkommen, {profile.name}</h1>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className={secondary} type="button" aria-expanded={passwordForm} disabled={pending} onClick={() => setPasswordForm(!passwordForm)}>Passwort ändern</button>
+              <button className={secondary} type="button" disabled={pending} onClick={signOut}>Abmelden</button>
+            </div>
+          </header>
+          {error && <p role="alert" className="no-print text-red-700">{error}</p>}
+          {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
+          <nav aria-label="Hauptnavigation" className="no-print flex flex-wrap gap-2">
+            {navigation.filter((item) => !item.admin || profile.role === "admin").map((item) => (
+              <button key={item.screen} type="button" className={screen === item.screen ? button : secondary}
+                aria-current={screen === item.screen ? "page" : undefined} onClick={() => setScreen(item.screen)}>{item.label}</button>
+            ))}
+          </nav>
+          {screen === "work" && <Workbench profile={profile} signingOut={pending} />}
+          {screen === "calendar" && <Calendar profile={profile} />}
+          {screen === "admin" && profile.role === "admin" && <Admin profile={profile} />}
+          {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
+        </div>
+      </main>
+    );
   }
 
   return (

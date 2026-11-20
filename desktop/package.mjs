@@ -9,6 +9,7 @@ const { version: electronVersion } = JSON.parse(await readFile("node_modules/ele
 
 try {
   await cp("desktop/main.cjs", resolve(staging, "main.cjs"));
+  await cp("desktop/preload.cjs", resolve(staging, "preload.cjs"));
   await cp(resolve(output, "renderer"), resolve(staging, "renderer"), { recursive: true });
   await writeFile(resolve(staging, "package.json"), JSON.stringify({
     name: "arbeitszeiterfassung", version, main: "main.cjs",

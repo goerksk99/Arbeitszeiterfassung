@@ -2,6 +2,8 @@ import { Temporal } from "@js-temporal/polyfill";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { berlinDate, calculateEntry, calculateMonth, COMPANY_ZONE, type AbsenceType } from "../lib/work-time";
 import { supabase, type Profile } from "./supabase";
+import { type MonthlyReport } from "../lib/monthly-report";
+import { button, card, field, requestError } from "./ui";
 
 type Entry = {
   id: string;
@@ -16,10 +18,6 @@ const entryColumns = "id, started_at, ended_at, break_minutes, break_adjusted, s
 const statusText = { open: "Offen", recorded: "Erfasst", submitted: "Zur Prüfung", approved: "Genehmigt", rejected: "Abgelehnt" };
 const time = new Intl.DateTimeFormat("de-DE", { timeZone: COMPANY_ZONE, hour: "2-digit", minute: "2-digit" });
 const date = new Intl.DateTimeFormat("de-DE", { timeZone: COMPANY_ZONE, dateStyle: "medium" });
-const button = "rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50";
-const field = "mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2";
-const card = "rounded-xl border border-slate-200 bg-white p-5";
-
 function duration(minutes: number) {
   const absolute = Math.abs(minutes);
   return `${minutes < 0 ? "−" : ""}${Math.floor(absolute / 60)} Std. ${absolute % 60} Min.`;
@@ -52,12 +50,7 @@ function rpcError(error: { code: string; message: string }) {
 
 type Report = { worked: number; breaks: number; balance: number; locked: boolean; leave: number };
 
-export function Workbench({ profile, onSignOut, signingOut, signOutError }: {
-  profile: Profile;
-  onSignOut: () => void;
-  signingOut: boolean;
-  signOutError: string;
-}) {
+export function Workbench({ profile, signingOut }: { profile: Profile; signingOut: boolean }) {
   const [month, setMonth] = useState(() => berlinDate(new Date().toISOString()).slice(0, 7));
   const [day, setDay] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -86,67 +79,54 @@ export function Workbench({ profile, onSignOut, signingOut, signOutError }: {
     const controller = new AbortController();
     async function load() {
       const selected = Temporal.PlainYearMonth.from(month);
-      const prior = selected.subtract({ months: 1 });
       const start = selected.toPlainDate({ day: 1 }).toZonedDateTime(COMPANY_ZONE).toInstant();
       const end = selected.add({ months: 1 }).toPlainDate({ day: 1 }).toZonedDateTime(COMPANY_ZONE).toInstant();
       const first = Temporal.PlainDate.from({ year: selected.year, month: 1, day: 1 }).toString();
       const last = Temporal.PlainDate.from({ year: selected.year, month: 12, day: 31 }).toString();
       const signal = controller.signal;
-      const [list, active, settingsResult, summary, previous, absence] = await Promise.all([
+      const [list, active, settingsResult, summary, absence] = await Promise.all([
         supabase.from("time_entries").select(entryColumns).eq("user_id", profile.id)
-          .gte("started_at", start.toString()).lt("started_at", end.toString()).order("started_at", { ascending: false }).abortSignal(signal),
+          .gte("started_at", start.toString()).lt("started_at", end.toString())
+          .or("corrects_entry_id.is.null,status.neq.approved").order("started_at", { ascending: false }).abortSignal(signal),
         supabase.from("time_entries").select(entryColumns).eq("user_id", profile.id)
           .eq("status", "open").abortSignal(signal).maybeSingle(),
         supabase.from("company_settings").select("auto_break_start, auto_break_minutes").eq("id", 1).abortSignal(signal).single(),
-        supabase.from("monthly_summaries").select("worked_minutes, break_minutes, balance_minutes, is_locked")
-          .eq("user_id", profile.id).eq("year", selected.year).eq("month", selected.month).abortSignal(signal).maybeSingle(),
-        supabase.from("monthly_summaries").select("balance_minutes").eq("user_id", profile.id)
-          .eq("year", prior.year).eq("month", prior.month).eq("is_locked", true).abortSignal(signal).maybeSingle(),
+        supabase.rpc("read_monthly_report", {
+          member_id: profile.id, report_year: selected.year, report_month: selected.month,
+        }).abortSignal(signal),
         supabase.from("absences").select("type, start_date, end_date").eq("user_id", profile.id)
-          .eq("status", "approved").lte("start_date", last).gte("end_date", first).abortSignal(signal),
+          .eq("status", "approved").eq("type", "vacation").lte("start_date", last).gte("end_date", first).abortSignal(signal),
       ]);
       if (signal.aborted) return;
-      if (list.error || active.error || settingsResult.error || summary.error || previous.error || absence.error) {
-        throw new Error("Die Buchungen konnten nicht geladen werden.");
-      }
+      const error = list.error ?? active.error ?? settingsResult.error ?? summary.error ?? absence.error;
+      if (error) throw error;
 
       const rows = list.data as Entry[];
-      let worked = 0;
-      let breaks = 0;
-      for (const entry of rows) {
-        if (!entry.ended_at || !["recorded", "approved"].includes(entry.status)) continue;
-        worked += calculateEntry(entry.started_at, entry.ended_at, undefined, entry.break_minutes).workedMinutes;
-        breaks += entry.break_minutes;
-      }
-      const absences = absence.data.map((row) => ({
+      const absences = (absence.data ?? []).map((row) => ({
         type: row.type as AbsenceType, startDate: row.start_date, endDate: row.end_date,
       }));
-      const calculation = {
-        year: selected.year, weeklyHours: profile.weeklyHours,
-        workedMinutes: worked, breakMinutes: breaks,
-        carryoverMinutes: previous.data?.balance_minutes ?? 0, absences,
-      };
       let vacationDays = 0;
       for (let index = 1; index <= 12; index++) {
-        vacationDays += calculateMonth({ ...calculation, month: index }).vacationDays;
+        vacationDays += calculateMonth({
+          month: index, year: selected.year, weeklyHours: profile.weeklyHours, workedMinutes: 0, breakMinutes: 0, absences,
+        }).vacationDays;
       }
-      const live = calculateMonth({ ...calculation, month: selected.month });
-      const fixed = summary.data?.is_locked ? summary.data : null;
+      const monthly = summary.data as MonthlyReport;
       setEntries(rows);
       setOpen(active.data as Entry | null);
-      setSettings({ start: settingsResult.data.auto_break_start, minutes: settingsResult.data.auto_break_minutes });
+      setSettings({ start: settingsResult.data!.auto_break_start, minutes: settingsResult.data!.auto_break_minutes });
       setReport({
-        worked: fixed?.worked_minutes ?? worked,
-        breaks: fixed?.break_minutes ?? breaks,
-        balance: fixed?.balance_minutes ?? live.balanceMinutes,
-        locked: Boolean(fixed),
+        worked: monthly.worked_minutes,
+        breaks: monthly.break_minutes,
+        balance: monthly.balance_minutes,
+        locked: monthly.is_locked,
         leave: profile.annualLeaveDays - vacationDays,
       });
       setLoadError("");
       setReady(true);
     }
-    void load().catch(() => {
-      if (!controller.signal.aborted) setLoadError("Die Buchungen konnten nicht geladen werden. Bitte prüfe deine Internetverbindung.");
+    void load().catch((error) => {
+      if (!controller.signal.aborted) setLoadError(error?.code === "PGRST202" ? requestError(error) : "Die Buchungen konnten nicht geladen werden. Bitte prüfe deine Internetverbindung.");
     });
     return () => controller.abort();
   }, [month, profile.id, profile.weeklyHours, profile.annualLeaveDays, refresh]);
@@ -219,16 +199,7 @@ export function Workbench({ profile, onSignOut, signingOut, signOutError }: {
   const shown = entries.filter((entry) => !day || berlinDate(entry.started_at) === day);
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-950 sm:px-6">
-      <div className="mx-auto max-w-5xl space-y-5">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-600">Arbeitszeiterfassung</p>
-            <h1 className="text-2xl font-semibold">Willkommen, {profile.name}</h1>
-          </div>
-          <button type="button" onClick={onSignOut} disabled={signingOut || pending} className="rounded-lg border border-slate-300 bg-white px-4 py-2">Abmelden</button>
-        </header>
-        {signOutError && <p role="alert" className="text-red-700">{signOutError}</p>}
+    <div className="space-y-5">
         {loadError && <p role="alert" className="text-red-700">{loadError} <button className="underline" onClick={reload}>Erneut laden</button></p>}
         {message && <p role={message.error ? "alert" : "status"} className={message.error ? "text-red-700" : "text-emerald-800"}>{message.text}</p>}
         <section className={card}>
@@ -301,7 +272,6 @@ export function Workbench({ profile, onSignOut, signingOut, signOutError }: {
             </div>
           </form>
         </section>}
-      </div>
-    </main>
+    </div>
   );
 }

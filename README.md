@@ -51,13 +51,60 @@ npm run desktop:package
 ```
 
 Das Ergebnis liegt in `.desktop/release/Arbeitszeiterfassung-win32-x64`.
-Das Paket ist unsigniert. Es enthält Anmeldung, Stempeluhr, eigene
-Buchungen und Korrekturanträge. Für ein bestehendes Supabase-Projekt
-zuerst die Migration `supabase/migrations/20261120010000_desktop_clock.sql`
-im SQL Editor ausführen. Die Übersicht ordnet Buchungen nach ihrem
-Berliner Startdatum zu und nutzt abgeschlossene Vormonate für den
-Saldoübertrag.
+Das Paket ist unsigniert. Für ein bestehendes Supabase-Projekt die unten
+aufgeführten Schritte zur Aktivierung ausführen. Die Übersicht ordnet
+Buchungen nach ihrem Berliner Startdatum zu und nutzt abgeschlossene
+Vormonate für den Saldoübertrag.
 
 Das kleine ZIP in `downloads/` verwendet denselben App-Build und lädt
 Electron beim ersten Start von GitHub. Zum Aktualisieren die App
 schließen und das ZIP in denselben entpackten Ordner kopieren.
+
+## Windows-Version 0.3.0 aktivieren und testen
+
+1. Im vorhandenen Supabase-Projekt unter **SQL Editor → New query** genau die
+   [neue Migration](supabase/migrations/20261120020000_calendar_admin_reports.sql)
+   vollständig ausführen. Bei Erstinstallation alle Migrationen in ihrer
+   Dateireihenfolge anwenden.
+2. Für **Mitarbeiterkonto anlegen** die Edge-Funktion `manage-employee`
+   im selben Supabase-Projekt bereitstellen. In **Edge Functions →
+   Deploy a new function → Via Editor** den vollständigen
+   [Funktionscode](supabase/functions/manage-employee/index.ts) als
+   `index.ts` einfügen und als `manage-employee` bereitstellen. In den
+   Einstellungen der Funktion **Verify JWT with legacy secret** deaktivieren.
+   Die Funktion verifiziert die Anmeldung selbst über Supabase Auth und prüft
+   zusätzlich aktiven Adminstatus. Supabase stellt der Funktion die benötigten
+   Backend-Variablen bereit.
+   Mit verknüpfter Supabase CLI geht es über
+   `supabase functions deploy manage-employee --no-verify-jwt`.
+3. App schließen, das [Windows-Startpaket](downloads/Arbeitszeiterfassung-Windows-Startpaket.zip)
+   im bestehenden App-Ordner entpacken und die Dateien ersetzen.
+   Dann `Arbeitszeiterfassung-starten.cmd` starten.
+
+Die Admin-Konsole legt Mitarbeiterkonten mit Startpasswort an. Das Passwort
+persönlich weitergeben und vom Mitarbeiter in der App ändern lassen.
+
+### Fachlicher Testablauf mit Testdaten
+
+1. Als Admin anmelden, ein fiktives Mitarbeiterkonto anlegen und bei Bedarf
+   dessen Wochenstunden und Jahresurlaub speichern.
+2. Als Mitarbeiter ein- und ausstempeln, optional Pause und Notiz eintragen.
+   Eine Buchung nachtragen oder korrigieren und den Status „Zur Prüfung“
+   kontrollieren.
+3. Im Mitarbeiterkonto Urlaub, Krankheit, Zeitausgleich und Sonstiges
+   beantragen. Monats- und Jahresansicht und die vier Filter prüfen.
+4. Als Admin die Anträge prüfen und genehmigen oder ablehnen. Bei einer
+   vergessenen Ausstempelzeit eine Endzeit mit Begründung erfassen.
+   Den Kalender nochmals als Mitarbeiter öffnen und prüfen, dass eigene
+   Krankmeldungen sichtbar sind und fremde ausgeblendet werden.
+5. Für einen vergangenen Monat erst offene Vorgänge abschließen, dann in
+   **Monatsberichte** den Monatsabschluss bestätigen. Den Saldo im Folgemonat
+   als Vortrag prüfen. Eine nachträgliche Änderung im gesperrten Monat
+   als Mitarbeiter versuchen.
+6. Je einen laufenden und einen abgeschlossenen Bericht als CSV exportieren
+   und die Druckansicht ansehen.
+
+Ein Abschluss ist ab dem ersten Tag des Folgemonats möglich. Nach dem ersten
+Abschluss folgen weitere Monate in chronologischer Reihenfolge, damit der
+Übertrag vollständig bleibt. Zeit über Mitternacht gehört zum Berliner
+Startdatum. Ganztägige Abwesenheiten zählen auf Montag bis Freitag.

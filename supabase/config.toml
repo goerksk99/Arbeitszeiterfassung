@@ -5,3 +5,6 @@ enable_signup = false
 
 [auth.email]
 enable_signup = false
+
+[functions.manage-employee]
+verify_jwt = false
