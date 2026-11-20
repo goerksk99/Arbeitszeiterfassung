@@ -126,3 +126,34 @@ eingegebene Pausendauer hat Vorrang.
 
 Zum App-Update das laufende Fenster schließen, das Windows-Startpaket
 im vorhandenen App-Ordner entpacken und die Dateien ersetzen.
+
+## Windows-Version 0.5.0
+
+1. Im bestehenden Supabase-Projekt
+   [die neue SQL-Migration](supabase/migrations/20261120040000_team_and_daily_reports.sql)
+   einmal vollständig ausführen. Der bisherige SQL-Tab kann wiederverwendet
+   werden.
+2. Für die Abteilung bei neuen Konten den Code der vorhandenen Edge-Funktion
+   [manage-employee](supabase/functions/manage-employee/index.ts) durch die
+   aktuelle Version ersetzen und erneut bereitstellen.
+3. Die App schließen und das aktualisierte Windows-Startpaket im vorhandenen
+   App-Ordner entpacken. Anschließend `Arbeitszeiterfassung-starten.cmd` öffnen.
+
+Unter **Verwaltung → Mitarbeiter verwalten** Teamgruppen anlegen und den
+Mitarbeitern eine Abteilung und bei Bedarf mehrere Teamgruppen zuordnen.
+Im **Teamkalender** lassen sich die Abwesenheiten nach Teamgruppe filtern.
+Die **Admin-Auswertung** im Kalender zeigt die Kennzahlen eines Mitarbeiters
+für den ausgewählten Monat.
+
+Bei **Arbeitszeiten** steht pro Tag der Zeitraum vom ersten Beginn bis zum
+letzten Ende. Die Nettozeit ergibt sich aus den einzelnen erfassten
+Arbeitsabschnitten abzüglich ihrer Pausen. Einzelbuchungen sind über
+**Buchungsdetails** erreichbar.
+
+In **Monatsberichte** einen Mitarbeiter und Monat auswählen, um alle
+Kalendertage mit Ist, Soll und Differenz zu sehen. Bundesweit einheitliche
+deutsche Feiertage werden angezeigt, haben null Sollzeit und verbrauchen
+keinen Urlaubstag. Regionale Feiertage sind bisher nicht enthalten.
+Neu abgeschlossene Monate speichern die Tageswerte. Bei älteren Abschlüssen
+kennzeichnet die App rekonstruierte Tageswerte. Die alte Monatssumme gilt
+weiterhin.

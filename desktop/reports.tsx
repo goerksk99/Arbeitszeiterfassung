@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { reportCsv, type MonthlyReport, type NamedReport } from "../lib/monthly-report";
 import { berlinDate } from "../lib/work-time";
+import { DailyReportTable, signedDuration } from "./staff-reports";
 import { supabase, type Profile } from "./supabase";
 import { button, card, field, listMembers, Message, monthLabel, monthNow, requestError, secondary, type Member, type Notice } from "./ui";
 
@@ -18,7 +19,7 @@ function minutes(value: number) {
 
 export function Reports({ profile }: { profile: Profile }) {
   const [month, setMonth] = useState(monthNow);
-  const [member, setMember] = useState("");
+  const [member, setMember] = useState(profile.id);
   const [members, setMembers] = useState<Member[]>([]);
   const [rows, setRows] = useState<NamedReport[]>([]);
   const [notice, setNotice] = useState<Notice>();
@@ -68,6 +69,7 @@ export function Reports({ profile }: { profile: Profile }) {
         ? { ...(data as MonthlyReport), full_name: row.full_name } : row));
       setNotice({ text: `Monat für ${confirm.full_name} abgeschlossen.` });
       setConfirm(null);
+      setRefresh((value) => value + 1);
     } catch (error) { setNotice({ text: requestError(error), error: true }); }
     finally { setClosing(""); }
   }
@@ -85,10 +87,16 @@ export function Reports({ profile }: { profile: Profile }) {
 
   if (!admin) return null;
   const past = month < berlinDate(new Date().toISOString()).slice(0, 7);
+  const selectedRow = member ? rows.find((row) => row.user_id === member) : undefined;
+  function closeAction(row: NamedReport) {
+    return !row.is_locked && (past
+      ? <button className={secondary} disabled={Boolean(closing)} onClick={() => { setNotice(undefined); setConfirm(row); }}>Monat abschließen</button>
+      : <span className="text-sm text-slate-600">Abschluss nach Monatsende</span>);
+  }
   return (
     <section className={`${card} report-print`}>
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-lg font-semibold">Monatsberichte</h2>
+        <h2 className="panel-heading">Monatsübersicht</h2>
         <div className="no-print flex flex-wrap gap-2">
           <button className={secondary} disabled={loading || !rows.length} onClick={exportCsv}>CSV exportieren</button>
           <button className={secondary} disabled={loading || !rows.length} onClick={() => window.desktop ? window.desktop.printReport() : window.print()}>Drucken</button>
@@ -108,7 +116,21 @@ export function Reports({ profile }: { profile: Profile }) {
         }}>Aktualisieren</button>
       </div>
       <div className="no-print my-3"><Message notice={notice} /></div>
-      {loading ? <p role="status">Berichte werden geladen …</p> : <div className="overflow-x-auto">
+      {loading ? <p role="status">Berichte werden geladen …</p> : selectedRow ? <div className="report-overview">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2"><strong>{selectedRow.full_name}</strong>
+            <span className="entry-status">{selectedRow.is_locked ? "Abgeschlossen" : "Offen"}</span>
+          </div>
+          <div className="no-print">{closeAction(selectedRow)}</div>
+        </div>
+        <div className="time-metrics">
+          <div><span>Ist</span><strong>{minutes(selectedRow.worked_minutes)} <small>Std.</small></strong></div>
+          <div><span>Soll</span><strong>{minutes(selectedRow.target_minutes)} <small>Std.</small></strong></div>
+          <div><span>Differenz</span><strong>{signedDuration(selectedRow.worked_minutes - selectedRow.target_minutes)} <small>Std.</small></strong></div>
+          <div><span>Saldo inkl. Vortrag</span><strong>{signedDuration(selectedRow.balance_minutes)} <small>Std.</small></strong></div>
+        </div>
+        <p className="mt-3 text-sm text-slate-600">Pause {minutes(selectedRow.break_minutes)} Std. · Vortrag {signedDuration(selectedRow.carryover_minutes)} Std. · Urlaub {selectedRow.vacation_days} Tage · Krankheit {selectedRow.sick_days} Tage · Zeitausgleich {selectedRow.comp_time_days} Tage</p>
+      </div> : <div className="overflow-x-auto">
         {!!rows.length && <table className="w-full border-collapse text-left text-sm">
           <caption className="sr-only">Zeitwerte im Format Stunden:Minuten</caption>
           <thead><tr className="border-b border-slate-300">
@@ -116,17 +138,22 @@ export function Reports({ profile }: { profile: Profile }) {
             <th className="no-print p-2">Aktion</th>
           </tr></thead>
           <tbody>{rows.map((row) => <tr className="border-b border-slate-200" key={row.user_id}>
-            <th scope="row" className="p-2 font-medium">{row.full_name}</th>
+            <th scope="row" className="p-2 font-medium">{member ? row.full_name : <>
+              <button type="button" className="no-print underline" onClick={() => {
+                setMember(row.user_id); setNotice(undefined); setConfirm(null); setLoading(true);
+              }} title="Tagesübersicht öffnen">{row.full_name}</button>
+              <span className="print-month">{row.full_name}</span>
+            </>}</th>
             {[row.target_minutes, row.worked_minutes, row.break_minutes, row.carryover_minutes, row.balance_minutes].map((value, index) => <td className="p-2" key={index}>{minutes(value)}</td>)}
             <td className="p-2">{row.vacation_days}</td><td className="p-2">{row.sick_days}</td><td className="p-2">{row.comp_time_days}</td>
             <td className="p-2">{row.is_locked ? "Abgeschlossen" : "Laufend"}</td>
-            <td className="no-print p-2">{!row.is_locked && (past
-              ? <button className="underline" disabled={Boolean(closing)} onClick={() => { setNotice(undefined); setConfirm(row); }}>Monat abschließen</button>
-              : "Nach Monatsende")}</td>
+            <td className="no-print p-2">{closeAction(row)}</td>
           </tr>)}</tbody>
         </table>}
         <p className="mt-3 text-xs text-slate-600">Zeitwerte in Stunden:Minuten. Abwesenheiten in Tagen.</p>
       </div>}
+      {!loading && member && rows.some((row) => row.user_id === member) &&
+        <DailyReportTable key={member + month + refresh} member={member} month={month} refresh={refresh} />}
       {confirm && <div className="no-print mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
         <p>Monat {monthLabel(month)} für {confirm.full_name} abschließen? Die Summen werden fest gespeichert und Mitarbeiterbuchungen gesperrt.</p>
         <div className="mt-3 flex gap-2">

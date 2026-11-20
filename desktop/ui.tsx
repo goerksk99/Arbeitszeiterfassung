@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Temporal } from "@js-temporal/polyfill";
 import { berlinDate, type AbsenceType } from "../lib/work-time";
 import { supabase } from "./supabase";
+import type { Staff } from "./team";
 
 export const button = "btn disabled:opacity-50";
 export const secondary = "btn-secondary disabled:opacity-50";
@@ -17,7 +18,7 @@ export const absenceColors: Record<AbsenceType, string> = {
   comp_time: "bg-sky-100 text-sky-950",
   other: "bg-amber-100 text-amber-950",
 };
-export type Member = { id: string; full_name: string; weekly_hours: number; annual_leave_days: number; is_active: boolean; role: "admin" | "employee" };
+export type Member = Staff;
 export type Notice = { text: string; error?: boolean };
 export const monthNow = () => berlinDate(new Date().toISOString()).slice(0, 7);
 export const monthLabel = (month: string) => Temporal.PlainYearMonth.from(month).toPlainDate({ day: 1 }).toLocaleString("de-DE", { month: "long", year: "numeric" });
@@ -42,7 +43,7 @@ export function requestError(error: unknown) {
 }
 
 export async function listMembers(signal?: AbortSignal): Promise<Member[]> {
-  let query = supabase.from("profiles").select("id, full_name, weekly_hours, annual_leave_days, is_active, role").order("full_name");
+  let query = supabase.from("profiles").select("id, full_name, weekly_hours, annual_leave_days, is_active, role, department").order("full_name");
   if (signal) query = query.abortSignal(signal);
   const { data, error } = await query;
   if (error) throw error;

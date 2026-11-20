@@ -31,6 +31,10 @@ Deno.serve(async (request: Request) => {
   const email = typeof input?.email === "string" ? input.email.trim() : "";
   const name = typeof input?.name === "string" ? input.name.trim() : "";
   const password = typeof input?.password === "string" ? input.password : "";
+  const department = input?.department;
+  if (!["management", "sales", "dispatch", "accounting"].includes(department)) {
+    return json({ error: "Bitte wähle eine Abteilung." }, 400);
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name || name.length > 120 || password.length < 12 || password.length > 72) {
     return json({ error: "Bitte gib Name, E-Mail-Adresse und ein Startpasswort mit 12 bis 72 Zeichen ein." }, 400);
   }
@@ -43,7 +47,7 @@ Deno.serve(async (request: Request) => {
     return json({ error: "Das Konto konnte nicht angelegt werden. Prüfe, ob die E-Mail bereits verwendet wird." }, 409);
   }
   const { error: profileError } = await admin.from("profiles").insert({
-    id: data.user.id, full_name: name, role: "employee",
+    id: data.user.id, full_name: name, role: "employee", department,
   });
   if (profileError) {
     const rollback = await admin.auth.admin.deleteUser(data.user.id);

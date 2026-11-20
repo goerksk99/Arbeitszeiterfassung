@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { CalendarDays, CalendarPlus, ClipboardList, Clock3, KeyRound, LogOut, Timer, UsersRound } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Clock3, KeyRound, LogOut, Timer, UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import "../app/globals.css";
 
 import { supabase, type Profile } from "./supabase";
 import { Workbench } from "./workbench";
-import { Admin } from "./admin";
+import { Admin, type AdminSection } from "./admin";
 import { Calendar } from "./calendar";
 import { Reports } from "./reports";
 import { button, field, PasswordForm } from "./ui";
@@ -16,6 +16,12 @@ import "./theme.css";
 import "./print.css";
 
 type Screen = "work" | "entries" | "calendar" | "absence" | "admin" | "reports";
+const adminItems: { id: AdminSection; label: string }[] = [
+  { id: "status", label: "Teamstatus heute" },
+  { id: "requests", label: "Anträge und offene Buchungen" },
+  { id: "staff", label: "Mitarbeiter verwalten" },
+  { id: "break", label: "Automatische Mittagspause" },
+];
 const navigation = [
   { screen: "work", label: "Stempeluhr", icon: Timer },
   { screen: "entries", label: "Arbeitszeiten", icon: Clock3 },
@@ -31,7 +37,27 @@ function App() {
   const [pending, setPending] = useState(false);
   const [screen, setScreen] = useState<Screen>("work");
   const [passwordForm, setPasswordForm] = useState(false);
-  useEffect(() => { window.scrollTo(0, 0); }, [screen]);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminSection, setAdminSection] = useState<AdminSection>("status");
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [adminRefresh, setAdminRefresh] = useState(0);
+  useEffect(() => { window.scrollTo(0, 0); }, [screen, adminSection]);
+  useEffect(() => {
+    if (profile?.role !== "admin") return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    async function countRequests() {
+      const [time, absence] = await Promise.all([
+        supabase.from("time_entries").select("id", { count: "exact", head: true }).eq("status", "submitted").abortSignal(signal),
+        supabase.from("absences").select("id", { count: "exact", head: true }).eq("status", "submitted").abortSignal(signal),
+      ]);
+      if (!signal.aborted && !time.error && !absence.error) setPendingRequests((time.count ?? 0) + (absence.count ?? 0));
+    }
+    const refresh = () => { void countRequests().catch(() => undefined); };
+    refresh();
+    const timer = window.setInterval(refresh, 30000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [profile?.role, adminRefresh]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,6 +115,8 @@ function App() {
       setProfile(null);
       setScreen("work");
       setPasswordForm(false);
+      setAdminOpen(false);
+      setPendingRequests(0);
     } catch {
       setError("Die Abmeldung ist fehlgeschlagen. Du kannst die App schließen, um die Sitzung zu beenden.");
     } finally {
@@ -107,8 +135,22 @@ function App() {
             {navigation.filter((item) => !("admin" in item) || profile.role === "admin").map(({ screen: name, label, icon: Icon }) => (
               <Fragment key={name}>
                 {name === "admin" && <p className="nav-heading">Administration</p>}
-                <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
-                  onClick={() => { setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>
+                {name === "admin" ? <>
+                  <button type="button" className="nav-button" aria-expanded={adminOpen} aria-controls="admin-navigation"
+                    onClick={() => setAdminOpen(!adminOpen)}>
+                    <Icon size={18} aria-hidden="true" />{label}
+                    {pendingRequests > 0 && <span className="request-count" aria-label={`${pendingRequests} offene Anträge`}>{pendingRequests}</span>}
+                    <ChevronDown size={15} aria-hidden="true" className={`ml-auto ${adminOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {adminOpen && <div className="admin-subnav" id="admin-navigation">
+                    {adminItems.map((item) => <button key={item.id} type="button" className="nav-button"
+                      aria-current={screen === "admin" && adminSection === item.id ? "page" : undefined}
+                      onClick={() => { setAdminSection(item.id); setScreen("admin"); setPasswordForm(false); }}>{item.label}
+                      {item.id === "requests" && pendingRequests > 0 && <span className="request-count">{pendingRequests}</span>}
+                    </button>)}
+                  </div>}
+                </> : <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
+                  onClick={() => { setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
               </Fragment>
             ))}
           </nav>
@@ -127,7 +169,7 @@ function App() {
         <div className="screen-area">
           <div className="screen-frame space-y-5">
             <header className="screen-header no-print">
-              <h1>{current.label}</h1>
+              <h1>{screen === "admin" ? adminItems.find((item) => item.id === adminSection)?.label : current.label}</h1>
               {screen === "work" && <p>Willkommen, {profile.name}</p>}
             </header>
             {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
@@ -136,7 +178,7 @@ function App() {
             {screen === "entries" && <Workbench profile={profile} />}
             {screen === "calendar" && <Calendar profile={profile} onRequest={() => setScreen("absence")} />}
             {screen === "absence" && <AbsenceRequest profile={profile} />}
-            {screen === "admin" && profile.role === "admin" && <Admin profile={profile} />}
+            {screen === "admin" && profile.role === "admin" && <Admin key={adminSection} profile={profile} section={adminSection} onChanged={() => setAdminRefresh((count) => count + 1)} />}
             {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
           </div>
         </div>

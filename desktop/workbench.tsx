@@ -1,7 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Coffee, LockKeyhole, Pencil, Plus } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { berlinDate, calculateEntry, calculateMonth, COMPANY_ZONE, type AbsenceType } from "../lib/work-time";
+import { berlinDate, calculateEntry, COMPANY_ZONE } from "../lib/work-time";
 import { isoWeek, weekMonday } from "../lib/iso-week";
 import { supabase, type Profile } from "./supabase";
 import { type MonthlyReport } from "../lib/monthly-report";
@@ -65,7 +65,7 @@ export function Workbench({ profile }: { profile: Profile }) {
       const end = endDay.toZonedDateTime(COMPANY_ZONE).toInstant().toString();
       const touchedMonths = [...new Set([firstDay.toString().slice(0, 7), endDay.subtract({ days: 1 }).toString().slice(0, 7)])];
       const signal = controller.signal;
-      const [list, settingsResult, summaries, absence] = await Promise.all([
+      const [list, settingsResult, summaries, leave] = await Promise.all([
         supabase.from("time_entries").select(entryColumns).eq("user_id", profile.id)
           .gte("started_at", start).lt("started_at", end)
           .or("corrects_entry_id.is.null,status.neq.approved").order("started_at", { ascending: false }).abortSignal(signal),
@@ -78,29 +78,15 @@ export function Workbench({ profile }: { profile: Profile }) {
           if (result.error) throw result.error;
           return result.data as MonthlyReport;
         })),
-        isWeek ? null : supabase.from("absences").select("type, start_date, end_date").eq("user_id", profile.id)
-          .eq("status", "approved").eq("type", "vacation")
-          .lte("start_date", firstDay.with({ month: 12, day: 31 }).toString())
-          .gte("end_date", firstDay.with({ month: 1, day: 1 }).toString()).abortSignal(signal),
+        isWeek ? null : supabase.rpc("read_annual_leave", { report_year: firstDay.year }).abortSignal(signal),
       ]);
       if (signal.aborted) return;
-      const error = list.error ?? settingsResult.error ?? absence?.error;
+      const error = list.error ?? settingsResult.error ?? leave?.error;
       if (error) throw error;
 
       const rows = list.data as Entry[];
       const complete = rows.filter((entry) => entry.ended_at && (entry.status === "recorded" || entry.status === "approved"));
       const monthly = summaries[0];
-      let vacationDays = 0;
-      if (!isWeek) {
-        const absences = (absence?.data ?? []).map((row) => ({
-          type: row.type as AbsenceType, startDate: row.start_date, endDate: row.end_date,
-        }));
-        for (let index = 1; index <= 12; index++) {
-          vacationDays += calculateMonth({
-            month: index, year: firstDay.year, weeklyHours: profile.weeklyHours, workedMinutes: 0, breakMinutes: 0, absences,
-          }).vacationDays;
-        }
-      }
       setEntries(rows);
       setSettings({ start: settingsResult.data!.auto_break_start, minutes: settingsResult.data!.auto_break_minutes });
       setReport({
@@ -108,7 +94,7 @@ export function Workbench({ profile }: { profile: Profile }) {
         breaks: isWeek ? complete.reduce((sum, entry) => sum + entry.break_minutes, 0) : monthly.break_minutes,
         balance: isWeek ? undefined : monthly.balance_minutes,
         lockedMonths: Object.fromEntries(touchedMonths.map((item, index) => [item, summaries[index].is_locked])),
-        leave: isWeek ? undefined : profile.annualLeaveDays - vacationDays,
+        leave: isWeek ? undefined : Number(leave?.data),
       });
       setLoadError("");
       setReady(true);
@@ -117,7 +103,7 @@ export function Workbench({ profile }: { profile: Profile }) {
       if (!controller.signal.aborted) setLoadError(error?.code === "PGRST202" ? requestError(error) : "Die Buchungen konnten nicht geladen werden.");
     });
     return () => controller.abort();
-  }, [mode, period, profile.id, profile.weeklyHours, profile.annualLeaveDays, refresh]);
+  }, [mode, period, profile.id, refresh]);
 
   function changePeriod(next: string) {
     if (!next || pending) return;
@@ -237,25 +223,38 @@ export function Workbench({ profile }: { profile: Profile }) {
         <h2>Meine Buchungen</h2>
         {!ready && !loadError && <p role="status" className="muted-notice">Buchungen werden geladen …</p>}
         {ready && !entries.length && <div className="empty-state"><CalendarDays size={28} aria-hidden="true" /><p>Hier sind noch keine Buchungen.</p></div>}
-        {ready && [...grouped].map(([key, rows]) => (
-          <div key={key} className="time-day">
-            <h3>{dayName.format(Date.parse(rows[0].started_at))} <span>{date.format(Date.parse(rows[0].started_at))}</span></h3>
-            {rows.map((entry) => {
-              const unlocked = !report?.lockedMonths[key.slice(0, 7)];
-              return <article key={entry.id} className="entry-line">
-                <div className="entry-times">
-                  <strong>{time.format(Date.parse(entry.started_at))} – {entry.ended_at ? time.format(Date.parse(entry.ended_at)) : "offen"}</strong>
-                  <span>{entry.break_minutes} Min. Pause{entry.note && ` · ${entry.note}`}</span>
-                </div>
-                <div className="entry-net">{entry.ended_at ? `${duration(calculateEntry(entry.started_at, entry.ended_at, undefined, entry.break_minutes).workedMinutes)} Std.` : "–"}</div>
+        {ready && [...grouped].map(([key, rows]) => {
+          const unlocked = !report?.lockedMonths[key.slice(0, 7)];
+          const timeline = rows.filter((entry) => ["open", "recorded", "approved"].includes(entry.status))
+            .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at));
+          const first = timeline[0] ?? rows.at(-1)!;
+          const active = timeline.some((entry) => !entry.ended_at);
+          const endings = (timeline.length ? timeline : rows).flatMap((entry) => entry.ended_at ? [Date.parse(entry.ended_at)] : []);
+          const last = endings.length ? Math.max(...endings) : null;
+          const completed = timeline.filter((entry) => entry.ended_at);
+          const worked = completed.reduce((value, entry) => value + calculateEntry(entry.started_at, entry.ended_at!, undefined, entry.break_minutes).workedMinutes, 0);
+          const pauses = completed.reduce((value, entry) => value + entry.break_minutes, 0);
+          const status = active ? "open" : completed.length ? "recorded" : first.status;
+          return <div key={key} className="time-day">
+            <h3>{dayName.format(Date.parse(first.started_at))} <span>{date.format(Date.parse(first.started_at))}</span></h3>
+            <div className="entry-line">
+              <div className="entry-times"><strong>{time.format(Date.parse(first.started_at))} – {active || last === null ? "offen" : time.format(last)}</strong>
+                {completed.length > 0 && <span>{pauses} Min. Pause</span>}</div>
+              <div className="entry-net">{completed.length ? `${duration(worked)} Std.` : "–"}</div>
+              <span className={`entry-status entry-status--${status}`}>{statusText[status]}</span>
+              {rows.length === 1 && unlocked && timeline.length === 1 && <button type="button" disabled={pending} className="entry-edit" onClick={() => setCorrection(first)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
+            </div>
+            {rows.length > 1 && <details className="daily-entry-details"><summary>Buchungsdetails{rows.some((entry) => entry.status === "submitted") && " · Antrag offen"}</summary>
+              {rows.map((entry) => <div key={entry.id} className="entry-line">
+                <div className="entry-times"><strong>{time.format(Date.parse(entry.started_at))} – {entry.ended_at ? time.format(Date.parse(entry.ended_at)) : "offen"}</strong>
+                  {entry.note && <span>{entry.note}</span>}</div>
+                <span className="text-slate-600">{entry.break_minutes} Min. Pause</span>
                 <span className={`entry-status entry-status--${entry.status}`}>{statusText[entry.status]}</span>
-                {unlocked && ["open", "recorded", "approved"].includes(entry.status) && (
-                  <button type="button" disabled={pending} className="entry-edit" onClick={() => setCorrection(entry)}><Pencil size={15} aria-hidden="true" />Korrektur</button>
-                )}
-              </article>;
-            })}
-          </div>
-        ))}
+                {unlocked && ["open", "recorded", "approved"].includes(entry.status) && <button type="button" disabled={pending} className="entry-edit" onClick={() => setCorrection(entry)}><Pencil size={15} aria-hidden="true" />Korrektur</button>}
+              </div>)}
+            </details>}
+          </div>;
+        })}
       </section>
         {correction && <section className={card}>
           <h2 className="text-lg font-semibold">{source ? "Buchung korrigieren" : "Zeit nachtragen"}</h2>
