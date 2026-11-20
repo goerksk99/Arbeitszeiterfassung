@@ -5,8 +5,7 @@ export const departments = {
   accounting: "Buchhaltung",
 } as const;
 export type Department = keyof typeof departments;
-export type TeamGroup = { id: string; name: string };
-export type Staff = { id: string; full_name: string; weekly_hours: number; annual_leave_days: number; is_active: boolean; role: "admin" | "employee"; department?: Department | null };
+export type Staff = { id: string; full_name: string; weekly_hours: number; annual_leave_days: number; is_active: boolean; role: "admin" | "employee"; department?: Department | null; automatic_lunch_break: boolean };
 
 export function DepartmentBadge({ department }: { department?: Department | null }) {
   return <span className={`department-badge department-${department ?? "none"}`}>{department ? departments[department] : "Ohne Abteilung"}</span>;

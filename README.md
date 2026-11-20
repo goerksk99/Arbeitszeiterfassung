@@ -202,3 +202,58 @@ App-Ordner entpacken und den Starter wieder öffnen.
   Das Rechtsklickmenü steuert Stempeln und Pausen.
   Beim Schließen des Fensters bleibt die angemeldete App im Hintergrund.
   **Beenden** im Rechtsklickmenü schließt sie vollständig.
+
+## Windows-Version 0.8.0
+
+1. Im bestehenden Supabase-Projekt die
+   [SQL-Migration für Pausenzeiten und Einstellungen](supabase/migrations/20261120060000_departments_and_break_history.sql)
+   vollständig im SQL Editor ausführen.
+2. Die vorhandene Edge-Funktion
+   [manage-employee](supabase/functions/manage-employee/index.ts) mit der
+   neuen `index.ts` aktualisieren und erneut bereitstellen.
+3. Die laufende App vollständig beenden, bei Bedarf über das Symbol im
+   Windows-Infobereich. Das neue Startpaket im vorhandenen Ordner entpacken
+   und den Starter öffnen.
+
+Der Teamkalender filtert nach Abteilung. Die Administration kann unter
+**Arbeitszeiten** einen Mitarbeiter auswählen, dessen Zeiten und
+gestempelte Pausen ansehen und bei ausgewähltem Monat den Monatsnachweis
+speichern. Die Auswahl gewährt Lesezugriff auf fremde Arbeitszeiten.
+Die automatische Mittagspause lässt sich in **Mitarbeiter verwalten**
+pro Konto ein- oder ausschalten. Gestempelte Pausen und eingetragene
+Pausenminuten können weiterhin erfasst werden. Beginn und Ende einer
+Pause sind für neu gestempelte Pausen verfügbar. Bereits abgeschlossene
+Pausen ohne Zeitstempel zeigen weiterhin ihre erfasste Dauer.
+
+### Einladung und Passwort-Reset per Geschäftsadresse
+
+Im Supabase-Dashboard unter **Authentication → Emails → SMTP Settings**
+einen SMTP-Dienst der Firma oder einen Mailanbieter mit passendem Tarif
+einrichten. Der eingebaute Testversand von Supabase ist für Adressen aus
+dem Projektteam beschränkt. SMTP-Zugangsdaten in Supabase hinterlegen.
+
+Unter **Authentication → Emails → Templates** die Vorlagen **Invite user**
+und **Reset password** öffnen. In beide den Einmalcode `{{ .Token }}`
+einfügen und die Standardlinks durch den Hinweis auf die Windows-App
+ersetzen. Beispiel für den HTML-Inhalt:
+
+```html
+<p>Dein Code für die Arbeitszeiterfassung lautet <strong>{{ .Token }}</strong>.</p>
+<p>Öffne die Windows-App und gib dort deine E-Mail-Adresse und diesen Code ein.</p>
+```
+
+Die E-Mail-Bestätigung in den Einstellungen des E-Mail-Anbieters in
+Supabase Auth aktiviert lassen. **Einladung per E-Mail senden** erstellt
+ein Konto ohne vorgegebenes Passwort. Mitarbeitende wählen
+**Einladung einlösen**, geben Geschäftsadresse und Code ein und setzen
+ihr eigenes Passwort. **Passwort vergessen?** startet denselben Ablauf
+mit einem neuen Code und funktioniert auch bei einem Admin-Konto mit
+erreichbarer E-Mail-Adresse.
+
+Die früher angelegten Konten wurden damals direkt als bestätigt
+angelegt. Prüfe ihre hinterlegten Adressen unter **Authentication →
+Users**. Bei einem Adresswechsel dieselbe Benutzer-ID behalten, damit
+die Buchungen zugeordnet bleiben. Nicht benötigte Testkonten in der
+Mitarbeiterverwaltung deaktivieren. Der erfolgreiche E-Mail-Empfang
+muss nach der SMTP-Einrichtung einmal mit einer echten Adresse geprüft
+werden.

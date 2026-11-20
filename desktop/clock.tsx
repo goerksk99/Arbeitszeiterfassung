@@ -8,7 +8,7 @@ import type { ClockAction } from "./desktop-api";
 import { card, field, Message, requestError, secondary, type Notice } from "./ui";
 
 type BreakState = { entry_id: string; paused_at: string | null; finished_seconds: number };
-type Shift = { open: Entry | null; breakState: BreakState | null; canPause: boolean; worked: number; pauses: number };
+type Shift = { open: Entry | null; breakState: BreakState | null; canPause: boolean; automaticLunch: boolean; worked: number; pauses: number };
 const todayLabel = new Intl.DateTimeFormat("de-DE", { timeZone: COMPANY_ZONE, dateStyle: "full" });
 
 export function Clock({ profile, onEntries, onTrayError }: { profile: Profile; onEntries: () => void; onTrayError: () => void }) {
@@ -43,16 +43,17 @@ export function Clock({ profile, onEntries, onTrayError }: { profile: Profile; o
     const end = day.add({ days: 1 }).toZonedDateTime(COMPANY_ZONE).toInstant().toString();
     const signal = controller.signal;
     async function load() {
-      const [open, breaks, done] = await Promise.all([
+      const [open, breaks, done, settingsMember] = await Promise.all([
         supabase.from("time_entries").select(entryColumns).eq("user_id", profile.id)
           .eq("status", "open").abortSignal(signal).maybeSingle(),
         supabase.rpc("clock_break_status").abortSignal(signal),
         supabase.from("time_entries").select("started_at, ended_at, break_minutes")
           .eq("user_id", profile.id).is("corrects_entry_id", null).in("status", ["recorded", "approved"])
           .gte("started_at", start).lt("started_at", end).abortSignal(signal),
+        supabase.from("profiles").select("automatic_lunch_break").eq("id", profile.id).abortSignal(signal).single(),
       ]);
       if (signal.aborted) return;
-      if (open.error || done.error || (breaks.error && breaks.error.code !== "PGRST202")) {
+      if (open.error || done.error || settingsMember.error || (breaks.error && breaks.error.code !== "PGRST202")) {
         setShift(undefined);
         setLoadError(true);
         return;
@@ -66,7 +67,7 @@ export function Clock({ profile, onEntries, onTrayError }: { profile: Profile; o
         pauses += entry.break_minutes;
       }
       setShift({ open: active, breakState: clockBreak?.entry_id === active?.id ? clockBreak : null,
-        canPause: !breaks.error, worked, pauses });
+        canPause: !breaks.error, automaticLunch: settingsMember.data?.automatic_lunch_break ?? true, worked, pauses });
       setLoadError(false);
     }
     void load().catch(() => { if (!signal.aborted) { setShift(undefined); setLoadError(true); } })
@@ -173,7 +174,7 @@ export function Clock({ profile, onEntries, onTrayError }: { profile: Profile; o
               <div className="grid gap-3 sm:grid-cols-2">
                 <label>Notiz<input className={field} name="note" maxLength={500} /></label>
                 <label>Pausendauer in Minuten<input className={field} name="pause" type="number" min="0" step="1"
-                  placeholder={shift?.breakState ? "Gemessene Dauer" : "Automatisch"} /></label>
+                  placeholder={shift?.breakState ? "Gemessene Dauer" : shift?.automaticLunch ? "Automatisch" : "0 Minuten"} /></label>
               </div>
             </details>}
           </form>

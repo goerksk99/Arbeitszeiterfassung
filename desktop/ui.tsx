@@ -43,7 +43,7 @@ export function requestError(error: unknown) {
 }
 
 export async function listMembers(signal?: AbortSignal): Promise<Member[]> {
-  let query = supabase.from("profiles").select("id, full_name, weekly_hours, annual_leave_days, is_active, role, department").order("full_name");
+  let query = supabase.from("profiles").select("id, full_name, weekly_hours, annual_leave_days, is_active, role, department, automatic_lunch_break").order("full_name");
   if (signal) query = query.abortSignal(signal);
   const { data, error } = await query;
   if (error) throw error;

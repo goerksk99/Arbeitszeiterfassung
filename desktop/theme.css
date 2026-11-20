@@ -207,8 +207,6 @@ label { color: inherit; }
 .calendar-details { margin-top: 9px; font-size: 14px; }
 .calendar-details > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 7px; padding: 9px 0; border-bottom: 1px solid #e5ebf2; }
 .calendar-details p { margin-top: 2px; color: var(--muted); font-size: 13px; }
-.calendar-group-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.calendar-group-tags span { padding: 2px 6px; border-radius: 6px; background: #eaf0f5; color: #455a75; font-size: 11px; }
 @media (max-width: 570px) {
   .admin-subnav { width: 100%; display: flex; flex-wrap: wrap; }
   .calendar-cell { min-height: 57px; padding: 2px; }
@@ -241,8 +239,8 @@ label { color: inherit; }
 .dashboard-decisions li { display: flex; align-items: center; justify-content: space-between; gap: 9px; border-bottom: 1px solid #e5ebf2; padding: 9px 0; font-size: 14px; }
 .dashboard-decisions .entry-status { gap: 5px; align-items: center; }
 .staff-reset { border-top: 1px solid #e1e8f0; padding: 10px 16px; font-size: 13px; }
-.staff-reset summary, .login-recovery summary { color: var(--green); font-weight: 650; }
-.login-recovery p { color: var(--muted); font-size: 14px; margin-top: 9px; }
+.staff-reset summary { color: var(--green); font-weight: 650; }
+
 @media (max-width: 830px) { .dashboard-grid { grid-template-columns: 1fr; } }
 
 .team-clock-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,245px),1fr)); gap: 12px; }
@@ -266,3 +264,11 @@ label { color: inherit; }
 .modal-heading h2 { font-weight: 740; font-size: 20px; }
 .modal-heading button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #edf3f7; }
 .modal-content { padding: 19px 20px; }
+
+.pause-history { display: flex; flex-wrap: wrap; gap: 5px 11px; font-size: 12px; }
+.pause-history li { display: flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.team-clock-breaks { color: #eef3fc; margin: 0 0 9px; }
+.entry-pauses { margin-top: 7px; color: #375d53; }
+
+.login-email-options { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 9px; margin-top: 15px; color: var(--green); font-size: 13px; font-weight: 650; }
+.login-email-options button:hover { text-decoration: underline; }

@@ -39,10 +39,10 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
         supabase.from("absences").select("id", { count: "exact", head: true }).eq("user_id", id).eq("status", "submitted").abortSignal(signal),
         supabase.from("time_entries").select("id,started_at,status,created_at,decided_at")
           .eq("user_id", id).in("status", ["approved","rejected"]).not("correction_reason","is",null)
-          .order("decided_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(5).abortSignal(signal),
+          .order("decided_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(10).abortSignal(signal),
         supabase.from("absences").select("id,type,start_date,end_date,status,created_at,decided_at")
           .eq("user_id", id).in("status", ["approved","rejected"])
-          .order("decided_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(5).abortSignal(signal),
+          .order("decided_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(10).abortSignal(signal),
         supabase.from("absences").select("type,start_date,end_date").eq("user_id", id).eq("status","approved")
           .lte("start_date", last).gte("end_date", first).abortSignal(signal),
         supabase.rpc("company_holidays", { first_day: first, last_day: last }).abortSignal(signal),
@@ -66,7 +66,7 @@ export function Dashboard({ profile, onEntries, onCalendar, onRequests, onClockP
       ];
       setData({
         time: time.count ?? 0, leave: leave.count ?? 0,
-        decisions: decisions.sort((a, b) => Date.parse(b.when) - Date.parse(a.when)).slice(0, 5),
+        decisions: decisions.sort((a, b) => Date.parse(b.when) - Date.parse(a.when)).slice(0, 10),
         absences: (absences.data ?? []) as Leave[],
         holidays: new Map((holidays.data as { day: string; name: string }[]).map((item) => [item.day, item.name])),
       });

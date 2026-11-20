@@ -3,13 +3,13 @@ import { useEffect, useState } from "react";
 import { CalendarDays, ChartNoAxesColumn, Plus } from "lucide-react";
 import { type AbsenceType, berlinDate } from "../lib/work-time";
 import { CalendarStaffReport } from "./staff-reports";
-import { DepartmentBadge, type Department, type TeamGroup } from "./team";
+import { DepartmentBadge, departments, type Department } from "./team";
 import { supabase, type Profile } from "./supabase";
 import { absenceColors, absenceLabels, button, card, DateNavigation, dayLabel, field, listMembers, Message, monthLabel, monthNow, secondary, type Member, type Notice } from "./ui";
 
 type CalendarEntry = {
   id: string; user_id: string; full_name: string; type: AbsenceType;
-  start_date: string; end_date: string; status: "approved" | "submitted" | "rejected"; department: Department | null; group_ids: string[];
+  start_date: string; end_date: string; status: "approved" | "submitted" | "rejected"; department: Department | null;
 };
 const kinds = Object.keys(absenceLabels) as AbsenceType[];
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -57,8 +57,7 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
   const [member, setMember] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
-  const [groups, setGroups] = useState<TeamGroup[]>([]);
-  const [group, setGroup] = useState("");
+  const [department, setDepartment] = useState("");
   const [holidays, setHolidays] = useState(new Map<string, string>());
   const [showReport, setShowReport] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -88,16 +87,14 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
     void Promise.all([
       supabase.rpc("team_calendar_details", params).abortSignal(controller.signal),
       supabase.rpc("company_holidays", params).abortSignal(controller.signal),
-      supabase.from("team_groups").select("id,name").order("name").abortSignal(controller.signal),
-    ]).then(([calendar, days, groupList]) => {
+    ]).then(([calendar, days]) => {
       if (controller.signal.aborted) return;
-      if (calendar.error || days.error || groupList.error) {
+      if (calendar.error || days.error) {
         setLoadError({ text: "Der Teamkalender konnte nicht geladen werden. Prüfe, ob das aktuelle SQL-Update eingespielt ist.", error: true });
-        setEntries([]); setHolidays(new Map()); setGroups([]);
+        setEntries([]); setHolidays(new Map());
       } else {
         setEntries((calendar.data as CalendarEntry[]).filter((entry) => entry.status === "approved"));
         setHolidays(new Map((days.data as { day: string; name: string }[]).map((day) => [day.day, day.name])));
-        setGroups(groupList.data as TeamGroup[]);
       }
       setLoading(false);
     });
@@ -105,7 +102,7 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
   }, [month, yearMode]);
 
   const currentMonth = Temporal.PlainYearMonth.from(month);
-  const items = entries.filter((item) => filter.includes(item.type) && (!member || item.user_id === member) && (!group || item.group_ids.includes(group)));
+  const items = entries.filter((item) => filter.includes(item.type) && (!member || item.user_id === member) && (!department || (item.department ?? "none") === department));
   const details = items.filter((item) => !selectedDay || (item.start_date <= selectedDay && item.end_date >= selectedDay));
   function navigate(direction: number) {
     setSelectedDay("");
@@ -120,15 +117,17 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
             {admin && <button className={secondary} aria-expanded={showReport} onClick={() => { if (!showReport) requestAnimationFrame(() => document.getElementById("calendar-staff-report")?.scrollIntoView({ block: "start" })); setShowReport(!showReport); }}>
               <ChartNoAxesColumn size={17} aria-hidden="true" />{showReport ? "Admin-Auswertung ausblenden" : "Admin-Auswertung"}
             </button>}
-            <button className={secondary} onClick={onRequest}><Plus size={17} aria-hidden="true" />Abwesenheit beantragen</button>
+            <button className={secondary} onClick={onRequest}><Plus size={17} aria-hidden="true" />Abwesenheiten</button>
             <button className={yearMode ? secondary : button} aria-pressed={!yearMode} onClick={() => { setYearMode(false); setSelectedDay(""); }}>Monat</button>
             <button className={yearMode ? button : secondary} aria-pressed={yearMode} onClick={() => { setYearMode(true); setSelectedDay(""); }}>Jahr</button>
           </div>
         </div>
         <div className="my-4 flex flex-wrap items-center justify-between gap-3">
           <DateNavigation previous={() => navigate(-1)} next={() => navigate(1)}>{yearMode ? currentMonth.year : monthLabel(month)}</DateNavigation>
-          <label>Teamgruppe<select className={field} value={group} onChange={(event) => setGroup(event.target.value)}>
-            <option value="">Alle Gruppen</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          <label>Abteilung<select className={field} value={department} onChange={(event) => setDepartment(event.target.value)}>
+            <option value="">Alle Abteilungen</option>
+            {Object.entries(departments).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            <option value="none">Ohne Abteilung</option>
           </select></label>
           {admin && <label>Mitarbeiter<select className={field} value={member} onChange={(event) => setMember(event.target.value)}>
             <option value="">Alle</option>{members.map((person) => <option key={person.id} value={person.id}>{person.full_name}</option>)}
@@ -156,7 +155,6 @@ export function Calendar({ profile, onRequest, initialDay }: { profile: Profile;
             {details.map((item) => <li key={item.id}>
               <div><strong>{item.full_name}</strong> <DepartmentBadge department={item.department} />
                 <p>{dayLabel(item.start_date)}{item.start_date !== item.end_date && ` bis ${dayLabel(item.end_date)}`}</p>
-                {item.group_ids.length > 0 && <div className="calendar-group-tags">{groups.filter((group) => item.group_ids.includes(group.id)).map((group) => <span key={group.id}>{group.name}</span>)}</div>}
               </div>
               <span className={`rounded px-2 py-1 ${absenceColors[item.type]}`}>{absenceLabels[item.type]}</span>
             </li>)}

@@ -11,8 +11,8 @@ const kinds = [
 ] as const;
 type Request = { id: string; type: AbsenceType; start_date: string; end_date: string; status: keyof typeof absenceStatus };
 
-export function AbsenceRequest({ profile, initialOpen = false }: { profile: Profile; initialOpen?: boolean }) {
-  const [open, setOpen] = useState(initialOpen);
+export function AbsenceRequest({ profile }: { profile: Profile }) {
+  const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<AbsenceType>("vacation");
   const [direct, setDirect] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -39,7 +39,7 @@ export function AbsenceRequest({ profile, initialOpen = false }: { profile: Prof
     const controller = new AbortController();
     const signal = controller.signal;
     void supabase.from("absences").select("id, type, start_date, end_date, status").eq("user_id", profile.id)
-      .order("created_at", { ascending: false }).limit(40).abortSignal(signal).then(({ data, error }) => {
+      .order("created_at", { ascending: false }).abortSignal(signal).then(({ data, error }) => {
         if (signal.aborted) return;
         setHistoryError(Boolean(error));
         if (!error) setRequests(data as Request[]);

@@ -3,7 +3,8 @@ import { Temporal } from "@js-temporal/polyfill";
 import { useEffect, useState, type FormEvent } from "react";
 import { berlinDate, COMPANY_ZONE, type AbsenceType } from "../lib/work-time";
 import { supabase, type Profile } from "./supabase";
-import { DepartmentBadge, DepartmentOptions, type TeamGroup } from "./team";
+import { DepartmentBadge, DepartmentOptions } from "./team";
+import { PauseDetails, type BreakInterval } from "./pause-details";
 import { duration, time } from "./time-display";
 import { absenceLabels, button, card, dayLabel, field, listMembers, Message, requestError, secondary, type Member, type Notice } from "./ui";
 
@@ -12,11 +13,10 @@ type Correction = { id: string; user_id: string; started_at: string; ended_at: s
 type OpenEntry = { id: string; user_id: string; started_at: string };
 type AbsenceRequest = { id: string; user_id: string; type: AbsenceType; start_date: string; end_date: string; note: string | null };
 type Shift = OpenEntry & { ended_at: string | null };
-type Membership = { group_id: string; user_id: string };
 export type AdminSection = "status" | "requests" | "staff" | "break";
 type ActivePause = { user_id: string; paused_at: string };
 type Data = {
-  members: Member[]; corrections: Correction[]; open: OpenEntry[]; paused: ActivePause[]; shifts: Shift[]; groups: TeamGroup[]; membership: Membership[];
+  members: Member[]; corrections: Correction[]; open: OpenEntry[]; paused: ActivePause[]; shifts: Shift[]; breaks: BreakInterval[];
   absences: AbsenceRequest[]; awayToday: AbsenceRequest[];
   settings: { auto_break_start: string; auto_break_minutes: number };
 };
@@ -44,7 +44,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
       const day = Temporal.PlainDate.from(today);
       const from = day.toZonedDateTime(COMPANY_ZONE).toInstant().toString();
       const until = day.add({ days: 1 }).toZonedDateTime(COMPANY_ZONE).toInstant().toString();
-      const [members, corrections, open, absences, awayToday, settings, pauses, shifts, groups, membership] = await Promise.all([
+      const [members, corrections, open, absences, awayToday, settings, pauses, shifts, breaks] = await Promise.all([
         listMembers(signal),
         supabase.from("time_entries").select("id,user_id,started_at,ended_at,break_minutes,correction_reason,note").eq("status", "submitted").order("created_at").abortSignal(signal),
         supabase.from("time_entries").select("id,user_id,started_at").eq("status", "open").abortSignal(signal),
@@ -56,17 +56,16 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           .in("status", ["open","recorded","approved"])
           .or(`and(started_at.gte.${from},started_at.lt.${until}),and(ended_at.gte.${from},ended_at.lt.${until})`)
           .abortSignal(signal),
-        supabase.from("team_groups").select("id,name").order("name").abortSignal(signal),
-        supabase.from("team_group_members").select("group_id,user_id").abortSignal(signal),
+        supabase.rpc("read_shift_breaks", { member_id: null, first_day: today, last_day: today }).abortSignal(signal),
       ]);
-      const error = corrections.error ?? open.error ?? absences.error ?? awayToday.error ?? settings.error ?? shifts.error ?? groups.error ?? membership.error ?? (pauses.error?.code === "PGRST202" ? null : pauses.error);
+      const error = corrections.error ?? open.error ?? absences.error ?? awayToday.error ?? settings.error ?? shifts.error ?? breaks.error ?? (pauses.error?.code === "PGRST202" ? null : pauses.error);
       if (error) throw error;
       if (signal.aborted) return;
       setData({
         members, corrections: corrections.data as Correction[], open: open.data as OpenEntry[],
         absences: absences.data as AbsenceRequest[], awayToday: awayToday.data as AbsenceRequest[],
         settings: settings.data!, paused: (pauses.data ?? []) as ActivePause[],
-        shifts: shifts.data as Shift[], groups: groups.data as TeamGroup[], membership: membership.data as Membership[],
+        shifts: shifts.data as Shift[], breaks: breaks.data as BreakInterval[],
       });
       setLoadError(undefined);
     }
@@ -128,26 +127,13 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
     const name = String(values.get("name") ?? "").trim();
     if (!name) return;
     void change(async () => {
-      const { error } = await supabase.rpc("save_staff_details", {
+      const { error } = await supabase.rpc("update_staff_settings", {
         member_id: member.id, member_name: name, hours: Number(values.get("hours")), leave_days: Number(values.get("leave")),
         active: member.id === profile.id || values.has("active"), member_department: String(values.get("department") ?? ""),
-        group_ids: values.getAll("group").map(String),
+        automatic_lunch: values.has("automatic_lunch"),
       });
       if (error) throw error;
     }, "Mitarbeiterprofil gespeichert.");
-  }
-
-  function addGroup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const name = String(new FormData(form).get("name") ?? "").trim();
-    if (!name) return;
-    void change(async () => {
-      const { error } = await supabase.from("team_groups").insert({ name });
-      if (error?.code === "23505") throw { code: "P0001", message: "Eine Teamgruppe mit diesem Namen gibt es bereits." };
-      if (error) throw error;
-      form.reset();
-    }, "Teamgruppe angelegt.");
   }
 
   function saveSettings(event: FormEvent<HTMLFormElement>) {
@@ -170,7 +156,8 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
     setNotice(undefined);
     try {
       const { error } = await supabase.functions.invoke("manage-employee", { body: {
-        name: String(values.get("name")).trim(), email: String(values.get("email")).trim(), password: String(values.get("password")), department: String(values.get("department")),
+        name: String(values.get("name")).trim(), email: String(values.get("email")).trim(), department: String(values.get("department")),
+        action: "invite", automaticLunch: values.has("automatic_lunch"),
       }});
       if (error) {
         const response = "context" in error ? error.context : undefined;
@@ -179,7 +166,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
         return;
       }
       form.reset();
-      setNotice({ text: "Mitarbeiterkonto angelegt. Gib das Startpasswort persönlich weiter." });
+      setNotice({ text: "Einladung an die Geschäftsadresse gesendet." });
       reload();
     } catch {
       setNotice({ text: "Das Konto konnte nicht angelegt werden.", error: true });
@@ -220,7 +207,6 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
     </div>;
   }
 
-  const staffData = data;
   function memberCard(member: Member) {
     return <details key={member.id} className="staff-member-details">
           <summary><strong>{member.full_name}</strong> <DepartmentBadge department={member.department} /></summary>
@@ -229,12 +215,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           <label>Wochenstunden<input className={field} name="hours" type="number" min="0" max="168" step="0.01" defaultValue={member.weekly_hours} required /></label>
           <label>Jahresurlaub (Tage)<input className={field} name="leave" type="number" min="0" max="366" step="0.01" defaultValue={member.annual_leave_days} required /></label>
           <label>Abteilung<select className={field} name="department" defaultValue={member.department ?? ""}><DepartmentOptions optional /></select></label>
-          {staffData.groups.length > 0 && <fieldset className="sm:col-span-2">
-            <legend className="text-sm font-semibold">Teamgruppen</legend>
-            <div className="mt-2 flex flex-wrap gap-3">{staffData.groups.map((group) => <label key={group.id} className="flex items-center gap-1.5">
-              <input type="checkbox" name="group" value={group.id} defaultChecked={staffData.membership.some((row) => row.user_id === member.id && row.group_id === group.id)} />{group.name}
-            </label>)}</div>
-          </fieldset>}
+          <label className="flex items-center gap-2"><input name="automatic_lunch" type="checkbox" defaultChecked={member.automatic_lunch_break} />Automatische Mittagspause</label>
           <label className="py-2"><input name="active" type="checkbox" defaultChecked={member.is_active} disabled={profile.id === member.id} className="mr-2" />Aktiv</label>
           <button className={secondary} disabled={busy}>Speichern</button>
           </form>
@@ -265,7 +246,7 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
             const starts = shifts.map((item) => item.started_at).filter((stamp) => berlinDate(stamp) === today).map(Date.parse);
             const ends = shifts.flatMap((item) => item.ended_at ? [item.ended_at] : []).filter((stamp) => berlinDate(stamp) === today).map(Date.parse);
             return <TeamClock key={member.id} member={member} open={open} away={away}
-              pauseStart={paused?.paused_at} first={starts.length ? Math.min(...starts) : undefined}
+              pauseStart={paused?.paused_at} breaks={data.breaks.filter((item) => item.user_id === member.id)} first={starts.length ? Math.min(...starts) : undefined}
               last={ends.length ? Math.max(...ends) : undefined} />;
           })}
         </div>
@@ -313,24 +294,8 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
           <label>Name<input className={field} name="name" required maxLength={120} /></label>
           <label>E-Mail-Adresse<input className={field} name="email" type="email" required /></label>
           <label>Abteilung<select name="department" className={field} defaultValue="" required><DepartmentOptions /></select></label>
-          <label>Startpasswort<input className={field} name="password" type="password" minLength={12} maxLength={72} required autoComplete="new-password" /></label>
-          <div className="self-end"><button className={button} disabled={busy}>Konto anlegen</button></div>
-        </form>
-      </section>
-      <section className={card}>
-        <h2 className="text-lg font-semibold">Teamgruppen</h2>
-        {data.groups.length > 0 && <ul className="request-history">{data.groups.map((group) => <li key={group.id}><span>{group.name}</span>
-          <button className={secondary} type="button" disabled={busy} onClick={() => {
-            if (!window.confirm(`Teamgruppe „${group.name}“ löschen?`)) return;
-            void change(async () => {
-              const { error } = await supabase.from("team_groups").delete().eq("id", group.id).select("id").single();
-              if (error) throw error;
-            }, "Teamgruppe gelöscht.");
-          }}>Löschen</button>
-        </li>)}</ul>}
-        <form onSubmit={addGroup} className="mt-4 flex flex-wrap items-end gap-3">
-          <label>Gruppenname<input name="name" className={field} maxLength={60} required /></label>
-          <button className={button} disabled={busy}>Teamgruppe anlegen</button>
+          <label className="flex items-center gap-2"><input name="automatic_lunch" type="checkbox" defaultChecked />Automatische Mittagspause</label>
+          <div className="self-end"><button className={button} disabled={busy}>Einladung per E-Mail senden</button></div>
         </form>
       </section>
       {data.members.some((member) => !member.is_active) && <section className={`${card} inactive-staff`}>
@@ -354,8 +319,8 @@ export function Admin({ profile, section, onChanged }: { profile: Profile; secti
 }
 
 
-function TeamClock({ member, open, away, pauseStart, first, last }: {
-  member: Member; open?: OpenEntry; away?: AbsenceRequest; pauseStart?: string; first?: number; last?: number;
+function TeamClock({ member, open, away, pauseStart, breaks, first, last }: {
+  member: Member; open?: OpenEntry; away?: AbsenceRequest; pauseStart?: string; breaks: BreakInterval[]; first?: number; last?: number;
 }) {
   const [now, setNow] = useState(Date.now);
   const runningSince = pauseStart ?? open?.started_at;
@@ -375,6 +340,7 @@ function TeamClock({ member, open, away, pauseStart, first, last }: {
       <p className="team-clock-counter">{counter}</p>
       <p className="team-clock-caption">{pauseStart ? "Laufende Pause" : "Seit Einstempeln"} · {time.format(Date.parse(runningSince))} Uhr</p>
     </> : <p className="team-clock-caption">{away ? absenceLabels[away.type] : "Keine offene Buchung"}</p>}
+    <PauseDetails breaks={breaks} className="pause-history team-clock-breaks" />
     <dl><div><dt>Erstes Einstempeln</dt><dd>{first !== undefined ? time.format(first) + " Uhr" : "–"}</dd></div>
       <div><dt>Letztes Ausstempeln</dt><dd>{last !== undefined ? time.format(last) + " Uhr" : "–"}</dd></div></dl>
   </article>;

@@ -9,7 +9,8 @@ import { Workbench } from "./workbench";
 import { Admin, type AdminSection } from "./admin";
 import { Calendar } from "./calendar";
 import { Reports } from "./reports";
-import { button, field, PasswordForm } from "./ui";
+import { EmailAuth, type EmailAuthMode } from "./email-auth";
+import { button, field, Message, PasswordForm } from "./ui";
 import { Dashboard } from "./dashboard";
 import { AbsenceRequest } from "./absence-request";
 import "./theme.css";
@@ -26,7 +27,7 @@ const navigation = [
   { screen: "work", label: "Dashboard", icon: LayoutDashboard },
   { screen: "entries", label: "Arbeitszeiten", icon: Clock3 },
   { screen: "calendar", label: "Teamkalender", icon: CalendarDays },
-  { screen: "absence", label: "Abwesenheit beantragen", icon: CalendarPlus },
+  { screen: "absence", label: "Abwesenheiten", icon: CalendarPlus },
   { screen: "admin", label: "Verwaltung", icon: UsersRound, admin: true },
   { screen: "reports", label: "Monatsberichte", icon: ClipboardList, admin: true },
 ] as const;
@@ -35,10 +36,11 @@ function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [emailMode, setEmailMode] = useState<EmailAuthMode | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState("");
   const [screen, setScreen] = useState<Screen>("work");
   const [passwordForm, setPasswordForm] = useState(false);
   const [calendarDay, setCalendarDay] = useState<string>();
-  const [newAbsence, setNewAbsence] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSection, setAdminSection] = useState<AdminSection>("status");
   const [pendingRequests, setPendingRequests] = useState(0);
@@ -65,6 +67,7 @@ function App() {
     event.preventDefault();
     if (pending) return;
     setError("");
+    setLoginSuccess("");
     setPending(true);
     const form = event.currentTarget;
     const data = new FormData(form);
@@ -152,7 +155,7 @@ function App() {
                     </button>)}
                   </div>}
                 </> : <button type="button" className="nav-button" aria-current={screen === name ? "page" : undefined}
-                  onClick={() => { if (name === "calendar") setCalendarDay(undefined); if (name === "absence") setNewAbsence(true); setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
+                  onClick={() => { if (name === "calendar") setCalendarDay(undefined); setScreen(name); setPasswordForm(false); }}><Icon size={18} aria-hidden="true" />{label}</button>}
               </Fragment>
             ))}
           </nav>
@@ -176,10 +179,10 @@ function App() {
             </header>
             {error && <p role="alert" className="no-print app-notice app-notice--error">{error}</p>}
             {passwordForm && <div className="no-print"><PasswordForm onClose={() => setPasswordForm(false)} /></div>}
-            <div hidden={screen !== "work"}><Dashboard profile={profile} onEntries={() => setScreen("entries")} onCalendar={(day) => { setCalendarDay(day); setScreen("calendar"); }} onRequests={() => { setNewAbsence(false); setScreen("absence"); }} onClockProblem={() => setScreen("work")} /></div>
+            <div hidden={screen !== "work"}><Dashboard profile={profile} onEntries={() => setScreen("entries")} onCalendar={(day) => { setCalendarDay(day); setScreen("calendar"); }} onRequests={() => setScreen("absence")} onClockProblem={() => setScreen("work")} /></div>
             {screen === "entries" && <Workbench profile={profile} />}
-            {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => { setNewAbsence(true); setScreen("absence"); }} />}
-            {screen === "absence" && <AbsenceRequest profile={profile} initialOpen={newAbsence} />}
+            {screen === "calendar" && <Calendar profile={profile} initialDay={calendarDay} onRequest={() => setScreen("absence")} />}
+            {screen === "absence" && <AbsenceRequest profile={profile} />}
             {screen === "admin" && profile.role === "admin" && <Admin key={adminSection} profile={profile} section={adminSection} onChanged={() => setAdminRefresh((count) => count + 1)} />}
             {screen === "reports" && profile.role === "admin" && <Reports profile={profile} />}
           </div>
@@ -193,6 +196,7 @@ function App() {
       <section className="login-panel">
         <div className="app-brand"><span className="brand-icon"><Clock3 size={22} aria-hidden="true" /></span>Arbeitszeiterfassung</div>
         <h1>Anmelden</h1>
+        {loginSuccess && <div className="mt-3"><Message notice={{ text: loginSuccess }} /></div>}
         <form onSubmit={signIn} className="mt-5 space-y-4">
           <label className="block text-sm font-semibold">
             E-Mail-Adresse<input name="email" type="email" required autoComplete="username" className={field} />
@@ -202,12 +206,17 @@ function App() {
           </label>
           {error && <p role="alert" className="app-notice app-notice--error">{error}</p>}
           <button type="submit" disabled={pending} className={button}>{pending ? "Anmeldung läuft …" : "Anmelden"}</button>
-          <details className="login-recovery">
-            <summary>Passwort vergessen?</summary>
-            <p>Melde dich bei eurer Verwaltung. Sie kann dir ein neues Startpasswort geben. Danach kannst du es unter „Passwort ändern“ selbst ändern.</p>
-          </details>
         </form>
+        <div className="login-email-options">
+          <button type="button" disabled={pending} onClick={() => setEmailMode("recovery")}>Passwort vergessen?</button>
+          <button type="button" disabled={pending} onClick={() => setEmailMode("invite")}>Einladung einlösen</button>
+        </div>
       </section>
+      {emailMode && <EmailAuth mode={emailMode} onClose={() => setEmailMode(null)} onComplete={() => {
+        setEmailMode(null);
+        setError("");
+        setLoginSuccess("Passwort gespeichert. Du kannst dich jetzt anmelden.");
+      }} />}
     </main>
   );
 }
