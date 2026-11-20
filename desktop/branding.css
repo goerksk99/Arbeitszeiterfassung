@@ -64,6 +64,8 @@
 .login-panel { width: min(100%, 384px); max-width: none; box-shadow: 0 16px 54px #09172375; }
 .proof-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .proof-brand { max-width: 26%; max-height: 34px; object-fit: contain; text-align: right; font-weight: 650; font-size: 11px; }
+img.proof-brand { width: 110px; height: 30px; object-position: right center; }
+img.proof-brand.company-logo--crop { object-fit: cover; object-position: center; }
 
 @media (max-width: 570px) {
   .company-brand--sidebar { gap: 2px; }

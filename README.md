@@ -258,16 +258,17 @@ Mitarbeiterverwaltung deaktivieren. Der erfolgreiche E-Mail-Empfang
 muss nach der SMTP-Einrichtung einmal mit einer echten Adresse geprüft
 werden.
 
-## Windows-Version 0.9.0
+## Windows-Version 0.9.1
 
 Für dieses Update genügt das Windows-Startpaket. Das Dashboard zeigt den
 persönlichen Resturlaub. Die **Mitarbeiterauswertung** hat einen eigenen
 Menüpunkt für Admins mit Mitarbeiter- und Monatsauswahl sowie dem
 Resturlaub für das gewählte Jahr.
 
-Das Startpaket verwendet ein blaues Nextway-Design. Für das Containerfoto
-und die Original-Logos die Bilddateien in denselben Ordner wie
-`Arbeitszeiterfassung-starten.cmd` legen. Die Endung muss zum Dateiformat
+Das Originalfoto `Background.png` und das Logo `Logo.png` sind im
+Startpaket enthalten und werden automatisch angezeigt. Bei Bedarf kann
+die App alternative Bilddateien aus dem Ordner von
+`Arbeitszeiterfassung-starten.cmd` laden. Die Endung muss zum Dateiformat
 passen (`.jpg`, `.jpeg` oder `.png`, jeweils bis 12 MB).
 
 - `nextway-container.jpg` erscheint beim Login und im App-Kopf.
